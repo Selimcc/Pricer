@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.env
+mobile/.env
+node_modules/
+.expo/
+dist/
+.DS_Store
+postgres_data/
