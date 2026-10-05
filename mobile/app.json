@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Grocery Waze",
+    "slug": "grocery-waze",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scan product barcodes to compare grocery prices.",
+        "NSLocationWhenInUseUsageDescription": "Find nearby stores and compare local prices."
+      }
+    },
+    "android": {
+      "permissions": [
+        "CAMERA",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Grocery Waze to scan product barcodes."
+        }
+      ],
+      "expo-location",
+      "expo-status-bar",
+      "expo-font"
+    ]
+  }
+}
