@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: grocery-waze-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: grocery
+      POSTGRES_USER: grocery
+      POSTGRES_PASSWORD: grocery_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grocery -d grocery"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    container_name: grocery-waze-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://grocery:grocery_dev_password@db:5432/grocery
+      CORS_ORIGINS: "*"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app
+
+volumes:
+  postgres_data:
