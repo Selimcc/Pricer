@@ -1,163 +1,126 @@
-# Grocery Waze — Local Prototype V0.2
+# Pricer — prix alimentaires communautaires (V0.4)
 
-Prototype local d'une application mobile de comparaison de prix communautaires.
+Scanner un produit, voir où il est le moins cher autour de soi, et savoir dans quel magasin faire sa liste de courses.
+Les prix viennent de la communauté (relevés datés, géolocalisés, avec photo) et d'Open Prices ; les magasins réels viennent d'OpenStreetMap.
 
-## Ce qui est nouveau dans V0.2
+> Nom de travail : « Pricer ». « Waze » est une marque de Google et ne peut pas être utilisé publiquement.
 
-### Mobile
-- gros bouton **Scanner un produit** ;
-- scan EAN-13 / EAN-8 / UPC avec cadre de scan dédié ;
-- récupération automatique de la position du téléphone ;
-- fiche produit plus lisible ;
-- comparaison triée par prix ;
-- mise en avant du **meilleur prix** ;
-- distance + fraîcheur du relevé ;
-- barre de fiabilité communautaire ;
-- boutons **Confirmer** / **Signaler** ;
-- parcours **J'ai trouvé ce prix en magasin** ;
-- sélection des magasins proches ;
-- ajout d'un prix + promotion ;
-- validation de présence par distance GPS.
+## Ce qui change dans la V0.4
 
-### PC
-Un dashboard local est disponible sur :
+**Vraies données**
+- Les supermarchés et supérettes autour de l'utilisateur sont importés automatiquement depuis OpenStreetMap (une fois par zone, puis gardés en base).
+- Les prix réels d'Open Prices (Open Food Facts) sont récupérés pour chaque produit consulté, avec leurs photos de preuve.
+- Architecture « provider » : ajouter une source de prix = écrire une classe dans `backend/app/services/providers/`.
 
-`http://localhost:8000/dashboard`
+**Produit**
+- Liste de courses avec comparaison des magasins : total estimé par magasin, produits manquants, option « plusieurs magasins ».
+- Un seul prix par magasin dans la comparaison (le relevé le plus récent encore valable), prix au kilo/litre, « bon plan » quand le prix est nettement sous le prix habituel.
+- Votes « c'est toujours ce prix » / « il a changé » ; un prix massivement contesté disparaît au profit du précédent.
+- Photo de l'étiquette comme preuve, stockée localement (prête pour S3).
+- Ajout d'un produit absent d'Open Food Facts.
+- Profil : contributions, niveau, confirmations reçues.
 
-Il affiche les compteurs produits / magasins / relevés / votes et les derniers relevés communautaires. Il utilise la même API que le téléphone.
+**Fiabilité**
+- Score de confiance v2 : fraîcheur (demi-vie 7 jours), votes (moyenne bayésienne), preuves (photo, GPS vérifié sur place).
+- Contrôle de présence : refus au-delà de 5 km du magasin, « relevé sur place » sous 500 m.
+- Prix anormal (très loin de la médiane) accepté mais signalé ; correction au lieu de doublon ; limite de 40 relevés/heure.
+- Validation de la clé de contrôle des codes-barres (une lecture ratée n'envoie plus de faux produit).
+
+**Technique**
+- Migrations Alembic. Une base V0.2 existante est reconnue et migrée sans perte de données.
+- PostGIS réellement utilisé (`ST_DWithin` + index GiST) pour les recherches « autour de moi ».
+- API découpée en routers, 29 tests sur une vraie base PostGIS, CI GitHub Actions (backend + typecheck mobile).
+- App mobile découpée en écrans, nouvelle interface, navigation par onglets, identifiant anonyme persistant.
 
 ## Architecture
 
 ```text
-Phone (Expo / React Native)
-        |
-        | HTTP sur le réseau local
-        v
-FastAPI
-   |
-   +---- PostgreSQL + PostGIS
-   |
-   +---- Open Food Facts (résolution EAN)
+Téléphone (Expo / React Native)
+        │ HTTP (Wi-Fi local)
+        ▼
+FastAPI ──► PostgreSQL + PostGIS
+   │
+   ├──► Open Food Facts (fiche produit)
+   ├──► Open Prices     (prix publics)
+   └──► Overpass / OSM  (magasins)
 
-PC: http://localhost:8000/dashboard
-API: http://localhost:8000/docs
+PC : http://localhost:8000/dashboard   ·   http://localhost:8000/docs
 ```
 
-Le téléphone **ne se connecte jamais directement à PostgreSQL**.
+Le téléphone ne parle jamais directement à PostgreSQL. PostgreSQL n'est exposé que sur la machine (127.0.0.1).
 
-## 1. Prérequis
+## Démarrer
 
-Installer :
-
-- Docker Desktop
-- Node.js 20+
-- Git
-- Expo Go sur iPhone ou Android
-
-Pour le test local, le téléphone et le PC doivent être sur le même Wi-Fi.
-
-## 2. Démarrer le backend + PostgreSQL
-
-Depuis le dossier du projet :
+### 1. Backend
 
 ```bash
 docker compose up --build -d
-```
-
-Vérifier :
-
-```bash
 curl http://localhost:8000/health
 ```
 
-Résultat attendu :
+Au démarrage, `python -m app.migrate` met la base à jour (ta base V0.2 est conservée) puis ajoute les données de démo.
 
-```json
-{"status":"ok","database":"ok"}
-```
-
-Ouvrir ensuite :
-
-- Dashboard : `http://localhost:8000/dashboard`
-- Swagger : `http://localhost:8000/docs`
-
-La base est automatiquement remplie avec des produits, magasins et prix de démonstration.
-
-## 3. Démarrer le mobile
+### 2. Mobile
 
 ```bash
 cd mobile
 npm install
+cp .env.example .env      # puis mettre l'IP Wi-Fi du PC (ipconfig)
 npx expo start
 ```
 
-Scanner le QR avec Expo Go.
+Scanner le QR code avec Expo Go. Le téléphone et le PC doivent être sur le même Wi-Fi.
 
-Créer `mobile/.env` :
+### Parcours de test
 
-```env
-EXPO_PUBLIC_API_URL=http://YOUR_PC_LAN_IP:8000
+1. Autoriser caméra et localisation : l'onglet **Magasins** doit lister les vrais magasins autour de toi (la première fois, l'import OSM prend quelques secondes).
+2. Scanner un produit de ton placard : prix Open Prices éventuels + magasins proches.
+3. En magasin : **Relever un prix**, choisir le magasin (badge « Tu es ici »), photographier l'étiquette, publier.
+4. **Ma liste** : scanner plusieurs produits, regarder « Où faire tes courses ».
+5. Vérifier sur le dashboard PC que le relevé apparaît.
+
+Pour tester sans te déplacer : `EXPO_PUBLIC_DEMO_LOCATION=true` dans `mobile/.env` (ou l'interrupteur dans l'onglet **Moi**) et le code `3017620422003`.
+
+## Tests
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+TEST_DATABASE_URL=postgresql+psycopg://grocery:grocery_dev_password@localhost:5432/grocery_test pytest
 ```
 
-Exemple :
-
-```env
-EXPO_PUBLIC_API_URL=http://192.168.1.42:8000
-```
-
-Sous Windows :
-
-```powershell
-ipconfig
-```
-
-Prendre l'IPv4 de la carte Wi-Fi/Ethernet utilisée par le PC.
-
-## 4. Parcours de test conseillé
-
-1. Démarrer Docker.
-2. Ouvrir `http://localhost:8000/dashboard` sur le PC.
-3. Démarrer Expo.
-4. Ouvrir l'application sur le téléphone.
-5. Autoriser caméra + localisation.
-6. Scanner le produit de démonstration : `3017620422003`.
-7. Vérifier les prix Carrefour / Monoprix / Auchan.
-8. Confirmer ou signaler un prix.
-9. Appuyer sur **J'ai trouvé ce prix en magasin**.
-10. Choisir un magasin proche et publier un nouveau prix.
-11. Revenir sur le dashboard PC : le relevé doit apparaître.
+La base de test doit avoir PostGIS ; elle est vidée à chaque lancement.
 
 ## Endpoints principaux
 
-- `GET /health`
-- `GET /stats`
-- `GET /observations/recent`
-- `GET /stores`
-- `GET /stores/nearby`
-- `GET /products/{ean}`
-- `GET /products/{ean}/comparison`
-- `POST /observations`
-- `POST /observations/{id}/vote`
+| | |
+|---|---|
+| `GET /products/{ean}` | fiche produit (base, puis Open Food Facts) |
+| `POST /products` | ajouter un produit inconnu |
+| `GET /products/{ean}/comparison` | prix actuels autour d'un point |
+| `GET /products/{ean}/history` | historique des relevés |
+| `GET /stores/nearby` · `GET /stores/{id}` | magasins proches, derniers prix d'un magasin |
+| `POST /observations` · `POST /observations/{id}/proof` · `POST /observations/{id}/vote` | relever, prouver, voter |
+| `GET/POST/PATCH/DELETE /users/{id}/list` · `GET /users/{id}/list/comparison` | liste de courses |
+| `GET /users/{id}/contributions` | profil contributeur |
 
-## Limites actuelles
+## Configuration (variables d'environnement du backend)
 
-Cette version reste volontairement locale :
+`SEED_DEMO`, `ENABLE_OPENFOODFACTS`, `ENABLE_OPEN_PRICES`, `ENABLE_OSM_IMPORT`, `UPLOAD_DIR`, `GPS_MAX_DISTANCE_KM`, `GPS_VERIFIED_RADIUS_M`, `MAX_CONTRIBUTIONS_PER_HOUR` : voir `backend/app/core/config.py`.
 
-- pas d'authentification réelle ;
-- pas encore de photo de preuve uploadée ;
-- magasins et prix de démonstration ;
-- pas encore de scraping réel des enseignes ;
-- pas encore d'Open Prices complet ;
-- mot de passe PostgreSQL et CORS adaptés uniquement au développement local ;
-- ne pas exposer directement cette API sur Internet.
+## Limites connues
 
-## Suite logique
+- Identité anonyme par appareil, pas encore de comptes : n'importe qui peut voter avec un nouvel identifiant.
+- Mot de passe PostgreSQL et CORS adaptés au développement local uniquement.
+- Les photos sont stockées sur le disque du conteneur (volume `uploads`).
+- Overpass (OSM) est un service public gratuit : il peut être lent ou refuser des requêtes en cas d'abus.
 
-1. photo de ticket / étiquette comme preuve ;
-2. historique des prix ;
-3. prix au kg / L / unité ;
-4. Open Prices comme source communautaire ;
-5. comptes utilisateurs + réputation ;
-6. vraie carte des magasins ;
-7. providers par enseigne ;
-8. puis seulement déploiement cloud / AWS.
+## Suite proposée
+
+1. **Ticket de caisse** : une photo = 20 à 40 prix datés et prouvés. C'est le levier principal contre le démarrage à froid.
+2. Comptes et réputation (V0.6), pour pondérer les votes.
+3. Graphique d'historique des prix dans la fiche produit (l'endpoint existe).
+4. Carte des magasins dans l'app.
+5. Cloudflare Tunnel pour tester hors du Wi-Fi, puis AWS seulement une fois l'usage validé.
+
+Données : prix Open Prices et magasins © contributeurs OpenStreetMap, sous licence ODbL ; fiches produits Open Food Facts.
