@@ -1,7 +1,9 @@
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
+
+from app.services.catalog import FAMILIES
 
 USER_ID_PATTERN = r"^[A-Za-z0-9_\-:.]{3,100}$"
 
@@ -22,6 +24,17 @@ class ProductOut(BaseModel):
     nutriscore_grade: str | None = None
     source: str | None = None
 
+    @computed_field
+    @property
+    def family(self) -> str | None:
+        return FAMILIES.get(self.source or "")
+
+    @computed_field
+    @property
+    def needs_photo(self) -> bool:
+        """Fiche incomplète : la communauté peut ajouter la photo."""
+        return not self.image_url
+
 
 class ProductCreate(BaseModel):
     """Produit absent d'Open Food Facts, saisi par un utilisateur."""
@@ -30,6 +43,7 @@ class ProductCreate(BaseModel):
     name: str = Field(min_length=2, max_length=255)
     brand: str | None = Field(default=None, max_length=255)
     quantity: str | None = Field(default=None, max_length=100)
+    user_id: str | None = Field(default=None, pattern=USER_ID_PATTERN)
 
 
 class ObservationCreate(BaseModel):

@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { imageUrl } from "./api";
 import { priceParts } from "./format";
 import { colors, fonts, radius, space, type } from "./theme";
 import type { ConfidenceLevel } from "./types";
@@ -226,7 +227,7 @@ export function Nutriscore({ grade }: { grade?: string | null }) {
 
 export function ProductThumb({ uri, size = 56 }: { uri?: string | null; size?: number }) {
   if (uri) {
-    return <Image source={{ uri }} style={[styles.thumb, { width: size, height: size }]} resizeMode="contain" />;
+    return <Image source={{ uri: imageUrl(uri) }} style={[styles.thumb, { width: size, height: size }]} resizeMode="contain" />;
   }
   return (
     <View style={[styles.thumb, styles.thumbEmpty, { width: size, height: size }]}>

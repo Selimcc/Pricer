@@ -44,6 +44,9 @@ class Product(Base):
     nutriscore_grade: Mapped[str | None] = mapped_column(String(2), nullable=True)
     source: Mapped[str] = mapped_column(String(20), default="off", server_default="off")
     prices_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Contributions au catalogue maison
+    created_by: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    image_added_by: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=True)
 
 

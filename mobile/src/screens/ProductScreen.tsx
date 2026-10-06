@@ -40,6 +40,7 @@ export function ProductScreen({ ean }: { ean: string }) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [proofFor, setProofFor] = useState<number | null>(null);
   const [addingToList, setAddingToList] = useState(false);
+  const [productPhotoOpen, setProductPhotoOpen] = useState(false);
 
   const loadPrices = useCallback(async () => {
     setLoadingPrices(true);
@@ -131,6 +132,18 @@ export function ProductScreen({ ean }: { ean: string }) {
     }
   }
 
+  async function uploadProductPhoto(uri: string) {
+    setProductPhotoOpen(false);
+    try {
+      const updated = await api.uploadProductImage(ean, userId, uri);
+      setProduct(updated);
+      rememberProduct(updated);
+      showToast("Merci ! La fiche du produit est complétée.", "success");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "La photo n'a pas pu être envoyée.", "error");
+    }
+  }
+
   // --- États sans produit -------------------------------------------------
   if (error && !product) {
     return (
@@ -188,7 +201,19 @@ export function ProductScreen({ ean }: { ean: string }) {
 
         {/* Produit */}
         <View style={styles.productHead}>
-          <ProductThumb uri={product.image_url} size={84} />
+          {product.image_url ? (
+            <ProductThumb uri={product.image_url} size={84} />
+          ) : (
+            <Pressable
+              onPress={() => setProductPhotoOpen(true)}
+              style={styles.addPhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Ajouter une photo du produit"
+            >
+              <Ionicons name="camera-outline" size={22} color={colors.ink} />
+              <Text style={styles.addPhotoText}>Ajouter{"\n"}une photo</Text>
+            </Pressable>
+          )}
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={styles.productName} numberOfLines={3}>
               {product.name}
@@ -198,6 +223,7 @@ export function ProductScreen({ ean }: { ean: string }) {
             </Text>
             <Row style={{ gap: space.sm, marginTop: 2 }}>
               <Nutriscore grade={product.nutriscore_grade} />
+              {product.family && !product.nutriscore_grade ? <Text style={styles.family}>{product.family}</Text> : null}
               <Text style={type.tiny}>EAN {product.ean}</Text>
             </Row>
           </View>
@@ -354,6 +380,7 @@ export function ProductScreen({ ean }: { ean: string }) {
         }}
       />
       <ProofCamera visible={proofFor !== null} onClose={() => setProofFor(null)} onCapture={uploadProof} />
+      <ProofCamera mode="product" visible={productPhotoOpen} onClose={() => setProductPhotoOpen(false)} onCapture={uploadProductPhoto} />
     </View>
   );
 }
@@ -465,6 +492,29 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: space.lg, marginBottom: space.md },
   pad: { paddingHorizontal: space.lg },
   productHead: { flexDirection: "row", gap: space.lg, paddingHorizontal: space.lg, marginBottom: space.lg, alignItems: "center" },
+  addPhoto: {
+    width: 84,
+    height: 84,
+    borderRadius: radius.sm,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+  addPhotoText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 13, color: colors.ink, textAlign: "center" },
+  family: {
+    fontFamily: fonts.semibold,
+    fontSize: 11,
+    color: colors.inkSoft,
+    backgroundColor: colors.navySoft,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    overflow: "hidden",
+  },
   productName: { fontFamily: fonts.display, fontSize: 28, lineHeight: 30, color: colors.ink },
 
   best: { backgroundColor: colors.navy, borderRadius: radius.lg, padding: space.lg, gap: 2 },

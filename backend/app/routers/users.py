@@ -208,6 +208,9 @@ def contributions(user_id: str = Depends(valid_user_id), limit: int = Query(20, 
     with_proof = db.scalar(select(func.count()).where(
         PriceObservation.user_id == user_id, PriceObservation.proof_image_url.is_not(None))) or 0
 
+    products_added = db.scalar(select(func.count()).where(Product.created_by == user_id)) or 0
+    photos_added = db.scalar(select(func.count()).where(Product.image_added_by == user_id)) or 0
+
     recent = db.execute(
         select(PriceObservation, Product, Store)
         .join(Product, Product.id == PriceObservation.product_id)
@@ -217,7 +220,7 @@ def contributions(user_id: str = Depends(valid_user_id), limit: int = Query(20, 
         .limit(limit)
     ).all()
     votes = pricing.vote_counts(db, [o.id for o, _, _ in recent])
-    score = count + votes_cast // 3 + with_proof
+    score = count + votes_cast // 3 + with_proof + 2 * products_added + photos_added
     return {
         "user_id": user_id,
         "price_count": count,
@@ -225,6 +228,8 @@ def contributions(user_id: str = Depends(valid_user_id), limit: int = Query(20, 
         "votes_cast": votes_cast,
         "store_count": stores,
         "proof_count": with_proof,
+        "products_added": products_added,
+        "photos_added": photos_added,
         "score": score,
         "level": level_for(score),
         "recent": [

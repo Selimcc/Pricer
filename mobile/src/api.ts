@@ -68,7 +68,7 @@ export const api = {
 
   product: (ean: string) => request<Product>(`/products/${encodeURIComponent(ean)}`),
 
-  createProduct: (data: { ean: string; name: string; brand?: string; quantity?: string }) =>
+  createProduct: (data: { ean: string; name: string; brand?: string; quantity?: string; user_id?: string }) =>
     request<Product>("/products", { method: "POST", body: JSON.stringify(data) }),
 
   searchProducts: (q: string) => request<Product[]>(`/products/search${qs({ q })}`),
@@ -101,6 +101,13 @@ export const api = {
     // React Native accepte { uri, name, type } comme fichier
     form.append("file", { uri: photoUri, name: "proof.jpg", type: "image/jpeg" } as unknown as Blob);
     return request<{ proof_image_url: string }>(`/observations/${observationId}/proof`, { method: "POST", body: form });
+  },
+
+  uploadProductImage: (ean: string, userId: string, photoUri: string) => {
+    const form = new FormData();
+    form.append("user_id", userId);
+    form.append("file", { uri: photoUri, name: "product.jpg", type: "image/jpeg" } as unknown as Blob);
+    return request<Product>(`/products/${encodeURIComponent(ean)}/image`, { method: "POST", body: form });
   },
 
   vote: (observationId: number, userId: string, vote: 1 | -1) =>

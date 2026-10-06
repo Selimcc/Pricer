@@ -5,6 +5,14 @@ Les prix viennent de la communauté (relevés datés, géolocalisés, avec photo
 
 > Nom de travail : « Pricer ». « Waze » est une marque de Google et ne peut pas être utilisé publiquement.
 
+## Stratégie données
+
+Phase actuelle : on s'appuie sur les bases ouvertes pour démarrer (Open Food Facts et ses bases sœurs pour les fiches, Open Prices pour les prix), mais tout ce qui passe par l'app est gardé chez nous.
+
+- **Catalogue** : notre base d'abord, puis Open Food Facts (alimentation), Open Beauty Facts (hygiène, beauté), Open Pet Food Facts (animaux) et Open Products Facts (maison, entretien, le reste), interrogées en parallèle. Un produit inconnu partout est créé par l'utilisateur, avec photo. Une fiche sans photo peut être complétée par la communauté.
+- **Prix** : chaque prix garde sa source (`community`, `open_prices`, `demo`). Les données communautaires restent séparables des données ODbL.
+- **Objectif** : que notre base devienne la référence et que les sources externes ne servent plus qu'au premier scan. Prochaine étape pour y arriver : le ticket de caisse.
+
 ## Ce qui change dans la V0.4
 
 **Vraies données**
@@ -29,7 +37,7 @@ Les prix viennent de la communauté (relevés datés, géolocalisés, avec photo
 **Technique**
 - Migrations Alembic. Une base V0.2 existante est reconnue et migrée sans perte de données.
 - PostGIS réellement utilisé (`ST_DWithin` + index GiST) pour les recherches « autour de moi ».
-- API découpée en routers, 29 tests sur une vraie base PostGIS, CI GitHub Actions (backend + typecheck mobile).
+- API découpée en routers, 34 tests sur une vraie base PostGIS, CI GitHub Actions (backend + typecheck mobile).
 - App mobile découpée en écrans, nouvelle interface, navigation par onglets, identifiant anonyme persistant.
 
 ## Architecture
@@ -97,6 +105,7 @@ La base de test doit avoir PostGIS ; elle est vidée à chaque lancement.
 |---|---|
 | `GET /products/{ean}` | fiche produit (base, puis Open Food Facts) |
 | `POST /products` | ajouter un produit inconnu |
+| `POST /products/{ean}/image` | photo d'emballage pour un produit qui n'en a pas |
 | `GET /products/{ean}/comparison` | prix actuels autour d'un point |
 | `GET /products/{ean}/history` | historique des relevés |
 | `GET /stores/nearby` · `GET /stores/{id}` | magasins proches, derniers prix d'un magasin |

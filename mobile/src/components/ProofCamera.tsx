@@ -6,16 +6,32 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, fonts, space, type } from "../theme";
 import { Button, EmptyState, IconButton } from "../ui";
 
-/** Appareil photo plein écran pour photographier l'étiquette ou le ticket. */
+const MODES = {
+  price: {
+    title: "Étiquette de prix",
+    hint: "Cadre l'étiquette entière : prix, nom du produit, prix au kilo.",
+    permission: "La photo prouve le prix affiché. Elle est rattachée à ton relevé et visible par la communauté.",
+  },
+  product: {
+    title: "Photo du produit",
+    hint: "Face avant de l'emballage, bien droite et lisible.",
+    permission: "La photo complète la fiche du produit pour toute la communauté.",
+  },
+};
+
+/** Appareil photo plein écran : étiquette de prix ou emballage du produit. */
 export function ProofCamera({
   visible,
   onClose,
   onCapture,
+  mode = "price",
 }: {
   visible: boolean;
   onClose: () => void;
   onCapture: (uri: string) => void;
+  mode?: keyof typeof MODES;
 }) {
+  const m = MODES[mode];
   const [permission, requestPermission] = useCameraPermissions();
   const [taking, setTaking] = useState(false);
   const camera = useRef<CameraView>(null);
@@ -41,8 +57,8 @@ export function ProofCamera({
           </View>
           <EmptyState
             icon="camera-outline"
-            title="Photographier l'étiquette"
-            text="La photo prouve le prix affiché. Elle est rattachée à ton relevé et visible par la communauté."
+            title={m.title}
+            text={m.permission}
             action={<Button label="Autoriser la caméra" icon="camera" onPress={requestPermission} />}
           />
         </View>
@@ -51,11 +67,11 @@ export function ProofCamera({
           <CameraView ref={camera} style={StyleSheet.absoluteFill} facing="back" />
           <View style={[styles.top, { paddingTop: insets.top + space.sm }]}>
             <IconButton icon="close" label="Annuler" tone="glass" onPress={onClose} />
-            <Text style={styles.title}>Étiquette de prix</Text>
+            <Text style={styles.title}>{m.title}</Text>
             <View style={{ width: 42 }} />
           </View>
           <View style={[styles.bottom, { paddingBottom: insets.bottom + space.lg }]}>
-            <Text style={styles.hint}>Cadre l'étiquette entière : prix, nom du produit, prix au kilo.</Text>
+            <Text style={styles.hint}>{m.hint}</Text>
             <Button label="Prendre la photo" icon="camera" onPress={take} loading={taking} />
           </View>
         </View>

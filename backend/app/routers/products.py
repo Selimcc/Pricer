@@ -1,16 +1,19 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db import get_db
 from app.models import PriceObservation, Product, Store
 from app.routers.deps import api_error, clean_ean, require_product, resolve_product
 from app.schemas import ProductCreate, ProductOut
+from app.schemas.schemas import USER_ID_PATTERN
 from app.services import geo, osm, pricing
 from app.services.providers import sync_product_prices
 from app.services.quantity import parse_quantity
+from app.services.storage import ALLOWED_TYPES, storage
 
 router = APIRouter(prefix="/products", tags=["Produits"])
 
@@ -40,6 +43,7 @@ def create_product(payload: ProductCreate, db: Session = Depends(get_db)):
     product = Product(
         ean=ean, name=payload.name.strip(), brand=(payload.brand or "").strip() or None,
         quantity=payload.quantity, quantity_value=value, quantity_unit=unit, source="user",
+        created_by=payload.user_id,
     )
     db.add(product)
     db.commit()
@@ -50,6 +54,30 @@ def create_product(payload: ProductCreate, db: Session = Depends(get_db)):
 @router.get("/{ean}", response_model=ProductOut)
 def get_product(ean: str, db: Session = Depends(get_db)):
     return resolve_product(db, ean)
+
+
+@router.post("/{ean}/image", response_model=ProductOut)
+async def add_product_image(ean: str, file: UploadFile = File(...), user_id: str = Form(..., pattern=USER_ID_PATTERN),
+                            db: Session = Depends(get_db)):
+    """Photo de l'emballage pour un produit qui n'en a pas (catalogue maison).
+
+    Une photo existante n'est jamais remplacée : ça évite qu'un seul
+    utilisateur puisse dégrader une fiche correcte.
+    """
+    product = require_product(db, ean)
+    if product.image_url:
+        raise api_error(409, "image_exists", "Ce produit a déjà une photo.")
+    content_type = (file.content_type or "").lower()
+    if content_type not in ALLOWED_TYPES:
+        raise api_error(415, "bad_image", "Format d'image non pris en charge (JPEG, PNG ou WebP).")
+    data = await file.read(settings.max_upload_mb * 1024 * 1024 + 1)
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise api_error(413, "image_too_large", f"Photo trop lourde (max {settings.max_upload_mb} Mo).")
+    product.image_url = storage.save(data, content_type)
+    product.image_added_by = user_id
+    db.commit()
+    db.refresh(product)
+    return product
 
 
 @router.get("/{ean}/comparison")
