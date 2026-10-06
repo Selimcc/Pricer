@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Product
 from app.schemas.schemas import USER_ID_PATTERN
-from app.services import openfoodfacts
+from app.services import catalog
 from app.services.ean import normalize_ean
 
 _USER_RE = re.compile(USER_ID_PATTERN)
@@ -35,14 +35,14 @@ def find_product(db: Session, raw_ean: str) -> Product | None:
 
 
 def resolve_product(db: Session, raw_ean: str) -> Product:
-    """Produit en base, sinon Open Food Facts (et on le garde), sinon 404."""
+    """Produit en base, sinon les bases ouvertes (et on le garde chez nous), sinon 404."""
     ean = clean_ean(raw_ean)
     product = db.scalar(select(Product).where(Product.ean == ean))
     if product:
         return product
-    external = openfoodfacts.lookup_ean(ean)
+    external = catalog.lookup_ean(ean)
     if not external:
-        raise api_error(404, "product_not_found", "Produit inconnu. Tu peux l'ajouter toi-même.")
+        raise api_error(404, "product_not_found", "Produit inconnu de toutes nos sources. Tu peux l'ajouter toi-même.")
     product = Product(ean=ean, **external)
     db.add(product)
     db.commit()

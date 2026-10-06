@@ -11,6 +11,9 @@ export type Product = {
   quantity_unit?: string | null;
   nutriscore_grade?: string | null;
   source?: string | null;
+  /** Rayon : Alimentation, Hygiène et beauté, Animaux, Maison et entretien… */
+  family?: string | null;
+  needs_photo?: boolean;
 };
 
 export type ConfidenceLevel = "high" | "medium" | "low";
@@ -128,6 +131,8 @@ export type Contributions = {
   votes_cast: number;
   store_count: number;
   proof_count: number;
+  products_added: number;
+  photos_added: number;
   score: number;
   level: { name: string; next_name: string | null; next_at: number | null; progress: number };
   recent: {

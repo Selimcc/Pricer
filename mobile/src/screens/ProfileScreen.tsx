@@ -45,7 +45,7 @@ export function ProfileScreen() {
                   </View>
                   <Text style={styles.levelText}>
                     Encore {Math.max(0, (data.level.next_at ?? 0) - data.score)} point{(data.level.next_at ?? 0) - data.score > 1 ? "s" : ""}{" "}
-                    pour devenir {data.level.next_name}. Un prix relevé = 1 point, une photo = 1 point de plus.
+                    pour devenir {data.level.next_name}. Un prix relevé = 1 point, une photo = 1 point, un produit ajouté au catalogue = 2 points.
                   </Text>
                 </>
               ) : (
@@ -58,6 +58,13 @@ export function ProfileScreen() {
               <Stat value={data.confirmations_received} label={data.confirmations_received > 1 ? "confirmations reçues" : "confirmation reçue"} />
               <Stat value={data.store_count} label={data.store_count > 1 ? "magasins" : "magasin"} />
             </View>
+
+            {data.products_added + data.photos_added > 0 && (
+              <Text style={[type.small, { marginTop: space.md }]}>
+                Catalogue : {data.products_added} produit{data.products_added > 1 ? "s" : ""} ajouté
+                {data.products_added > 1 ? "s" : ""}, {data.photos_added} photo{data.photos_added > 1 ? "s" : ""} de produit.
+              </Text>
+            )}
 
             <SectionTitle>Tes derniers relevés</SectionTitle>
             {data.recent.length === 0 ? (
