@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -73,3 +74,22 @@ class ListItemCreate(BaseModel):
 class ListItemUpdate(BaseModel):
     quantity: int | None = Field(default=None, ge=1, le=99)
     checked: bool | None = None
+
+
+class ReceiptUpdate(BaseModel):
+    user_id: str = Field(pattern=USER_ID_PATTERN)
+    store_id: int | None = None
+    purchased_at: datetime | None = None
+
+
+class ReceiptLineUpdate(BaseModel):
+    user_id: str = Field(pattern=USER_ID_PATTERN)
+    ean: str | None = None
+    clear_product: bool = False
+    status: Literal["pending", "ignored"] | None = None
+    unit_price: Decimal | None = Field(default=None, gt=0, lt=Decimal("1000"), decimal_places=2)
+    quantity: Decimal | None = Field(default=None, gt=0, lt=Decimal("1000"))
+
+
+class ReceiptAction(BaseModel):
+    user_id: str = Field(pattern=USER_ID_PATTERN)

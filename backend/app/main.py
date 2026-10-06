@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
-from app.routers import observations, products, stores, system, users
+from app.routers import observations, products, receipts, stores, system, users
 from app.routers.system import API_VERSION
 
 app = FastAPI(
@@ -25,7 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for router in (system.router, products.router, stores.router, observations.router, users.router):
+for router in (system.router, products.router, stores.router, observations.router, receipts.router, users.router):
     app.include_router(router)
 
 Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)

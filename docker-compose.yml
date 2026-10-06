@@ -1,3 +1,5 @@
+name: grocery-waze
+
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -31,6 +33,7 @@ services:
       ENABLE_OPEN_PRICES: "true"
       ENABLE_OSM_IMPORT: "true"
       UPLOAD_DIR: /app/uploads
+      RECEIPTS_DIR: /app/receipts
     ports:
       - "8000:8000"
     depends_on:
@@ -40,7 +43,9 @@ services:
       - ./backend/app:/app/app
       - ./backend/alembic:/app/alembic
       - uploads:/app/uploads
+      - receipts:/app/receipts
 
 volumes:
   postgres_data:
   uploads:
+  receipts:

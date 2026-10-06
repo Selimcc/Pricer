@@ -3,6 +3,9 @@ from app.models.models import (  # noqa: F401
     OsmImportArea,
     PriceObservation,
     Product,
+    Receipt,
+    ReceiptLabelMapping,
+    ReceiptLine,
     ShoppingListItem,
     Store,
 )

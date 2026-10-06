@@ -30,6 +30,10 @@ class Settings(BaseSettings):
 
     # Stockage des preuves photo (dossier local, remplaçable par S3 plus tard)
     upload_dir: str = "/app/uploads"
+    # Tickets de caisse : dossier privé, jamais servi par l'API
+    receipts_dir: str = "/app/receipts"
+    enable_ocr: bool = True
+    ocr_languages: str = "fra"
     max_upload_mb: int = 8
 
 
