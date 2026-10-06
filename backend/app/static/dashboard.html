@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pricer · Centre de contrôle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--bg:#ECEFF4;--surface:#fff;--ink:#14213D;--soft:#3B4866;--muted:#6C7690;--line:#DADFE8;--promo:#FFD23F;--good:#0B7A52;--goodSoft:#DFF2E9;--bad:#C2362C;--badSoft:#FBE7E5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 Barlow,system-ui,sans-serif}
+.wrap{max-width:1200px;margin:auto;padding:28px 20px 48px}
+h1,h2,.num{font-family:"Barlow Condensed",system-ui,sans-serif;font-weight:800;margin:0}
+h1{font-size:40px;line-height:1}
+h2{font-size:24px;margin-bottom:12px}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+.sub{color:var(--soft);margin-top:4px}
+.status{border-radius:999px;padding:8px 14px;font-weight:600;background:var(--surface)}
+.status.ok{background:var(--goodSoft);color:var(--good)}
+.status.ko{background:var(--badSoft);color:var(--bad)}
+button{font:600 15px Barlow,sans-serif;border:0;border-radius:10px;padding:10px 16px;background:var(--ink);color:#fff;cursor:pointer}
+button:focus-visible,a:focus-visible{outline:3px solid var(--promo);outline-offset:2px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--surface);border-radius:12px;padding:14px 16px}
+.stat .num{font-size:38px;line-height:1}
+.stat span{color:var(--muted);font-size:14px}
+.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px;margin-top:16px}
+.panel{background:var(--surface);border-radius:16px;padding:18px}
+#map{height:420px;border-radius:10px;background:var(--bg)}
+.bars{display:flex;flex-direction:column;gap:10px}
+.bar{display:grid;grid-template-columns:120px 1fr 48px;align-items:center;gap:10px;font-size:14px}
+.track{height:10px;background:var(--bg);border-radius:5px;overflow:hidden}
+.fill{height:100%;background:var(--ink)}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:top}
+th{color:var(--muted);font-weight:500}
+.price{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:20px;white-space:nowrap}
+.tag{display:inline-block;background:var(--promo);color:#3A2C00;font-weight:600;font-size:12px;padding:1px 6px;border-radius:3px;transform:rotate(-2deg)}
+.lvl-high{color:var(--good)}.lvl-medium{color:var(--soft)}.lvl-low{color:var(--bad)}
+.muted{color:var(--muted)}
+.foot{color:var(--muted);font-size:13px;margin-top:20px}
+@media(max-width:860px){.grid{grid-template-columns:1fr}.hide-sm{display:none}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="top">
+    <div>
+      <h1>Pricer, centre de contrôle</h1>
+      <div class="sub">Base locale : produits, magasins, relevés et qualité des prix.</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span id="status" class="status">Connexion…</span>
+      <button onclick="load()">Actualiser</button>
+    </div>
+  </div>
+
+  <section class="stats" aria-label="Chiffres clés">
+    <div class="stat"><div class="num" id="observations">–</div><span>relevés de prix</span></div>
+    <div class="stat"><div class="num" id="products">–</div><span>produits</span></div>
+    <div class="stat"><div class="num" id="stores">–</div><span>magasins</span></div>
+    <div class="stat"><div class="num" id="contributors">–</div><span>contributeurs</span></div>
+    <div class="stat"><div class="num" id="votes">–</div><span>votes</span></div>
+    <div class="stat"><div class="num" id="with_proof">–</div><span>avec photo</span></div>
+    <div class="stat"><div class="num" id="flagged">–</div><span>prix anormaux</span></div>
+  </section>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>Magasins connus</h2>
+      <div id="map" role="img" aria-label="Carte des magasins"></div>
+    </section>
+    <section class="panel">
+      <h2>D'où viennent les prix</h2>
+      <div class="bars" id="sources"></div>
+      <h2 style="margin-top:22px">D'où viennent les magasins</h2>
+      <div class="bars" id="storeSources"></div>
+      <p class="muted" style="font-size:14px">Zones importées depuis OpenStreetMap : <b id="osm_areas">–</b>. Articles dans des listes de courses : <b id="list_items">–</b>.</p>
+    </section>
+  </div>
+
+  <section class="panel" style="margin-top:16px">
+    <h2>Derniers relevés</h2>
+    <div style="overflow:auto">
+      <table>
+        <thead><tr><th>Produit</th><th>Magasin</th><th>Prix</th><th>Source</th><th>Fiabilité</th><th class="hide-sm">Preuves</th><th class="hide-sm">Votes</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+  <p class="foot">Swagger : <a href="/docs">/docs</a>. Données magasins © contributeurs OpenStreetMap, prix Open Prices (ODbL).</p>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const SOURCES = {community: "Communauté", open_prices: "Open Prices", demo: "Démo", osm: "OpenStreetMap"};
+const LEVELS = {high: "Fiable", medium: "Plutôt fiable", low: "À vérifier"};
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let map, layer;
+
+function bars(el, data) {
+  const total = Object.values(data).reduce((a, b) => a + b, 0) || 1;
+  el.innerHTML = Object.entries(data).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
+    `<div class="bar"><span>${esc(SOURCES[k] || k)}</span><div class="track"><div class="fill" style="width:${v / total * 100}%"></div></div><b>${v}</b></div>`
+  ).join("") || '<span class="muted">Aucune donnée</span>';
+}
+
+async function load() {
+  const status = document.getElementById("status");
+  try {
+    const s = await fetch("/stats").then(r => r.json());
+    for (const k of ["observations", "products", "stores", "contributors", "votes", "with_proof", "flagged", "osm_areas", "list_items"])
+      document.getElementById(k).textContent = s[k];
+    bars(document.getElementById("sources"), s.observations_by_source);
+    bars(document.getElementById("storeSources"), s.stores_by_source);
+
+    const rows = await fetch("/observations/recent?limit=25").then(r => r.json());
+    document.getElementById("rows").innerHTML = rows.map(x => `<tr>
+      <td><b>${esc(x.product)}</b><br><span class="muted">${esc(x.brand)}</span></td>
+      <td>${esc(x.chain)}<br><span class="muted">${esc(x.store)}${x.city ? ", " + esc(x.city) : ""}</span></td>
+      <td><span class="price">${x.price.toFixed(2).replace(".", ",")} €</span>${x.promotion ? `<br><span class="tag">${esc(x.promotion)}</span>` : ""}</td>
+      <td>${esc(SOURCES[x.source] || x.source)}<br><span class="muted">${new Date(x.observed_at).toLocaleString("fr-FR")}</span></td>
+      <td class="lvl-${x.confidence_level}">${LEVELS[x.confidence_level]} (${x.confidence})${x.flagged ? '<br><span class="lvl-low">prix anormal</span>' : ""}</td>
+      <td class="hide-sm">${x.gps_verified ? "GPS sur place" : "–"}${x.has_proof ? "<br>Photo" : ""}</td>
+      <td class="hide-sm">${x.confirmations} oui · ${x.rejections} non</td></tr>`).join("");
+
+    const stores = await fetch("/stores?limit=1000").then(r => r.json());
+    if (window.L) {
+      if (!map) {
+        map = L.map("map");
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: "© OpenStreetMap"}).addTo(map);
+        layer = L.layerGroup().addTo(map);
+      }
+      layer.clearLayers();
+      const pts = stores.map(st => {
+        L.circleMarker([st.latitude, st.longitude], {radius: 6, color: "#14213D", weight: 2, fillColor: st.source === "demo" ? "#FFD23F" : "#fff", fillOpacity: 1})
+          .bindPopup(`<b>${esc(st.chain)}</b><br>${esc(st.name)}<br><span class="muted">${esc(SOURCES[st.source] || st.source)}</span>`).addTo(layer);
+        return [st.latitude, st.longitude];
+      });
+      if (pts.length) map.fitBounds(pts, {padding: [20, 20], maxZoom: 15}); else map.setView([48.8566, 2.3522], 11);
+    }
+    status.textContent = "API connectée"; status.className = "status ok";
+  } catch (e) {
+    status.textContent = "API indisponible"; status.className = "status ko";
+  }
+}
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

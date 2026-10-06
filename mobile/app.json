@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "Grocery Waze",
+    "name": "Pricer",
     "slug": "grocery-waze",
-    "version": "0.1.0",
+    "version": "0.4.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Scan product barcodes to compare grocery prices.",
-        "NSLocationWhenInUseUsageDescription": "Find nearby stores and compare local prices."
+        "NSCameraUsageDescription": "La caméra lit les codes-barres et photographie les étiquettes de prix.",
+        "NSLocationWhenInUseUsageDescription": "Ta position sert à trouver les magasins et les prix autour de toi."
       }
     },
     "android": {
@@ -23,11 +23,15 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Grocery Waze to scan product barcodes."
+          "cameraPermission": "La caméra lit les codes-barres et photographie les étiquettes de prix."
         }
       ],
-      "expo-location",
-      "expo-status-bar",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Ta position sert à trouver les magasins et les prix autour de toi."
+        }
+      ],
       "expo-font"
     ]
   }
