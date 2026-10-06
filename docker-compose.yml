@@ -7,8 +7,9 @@ services:
       POSTGRES_DB: grocery
       POSTGRES_USER: grocery
       POSTGRES_PASSWORD: grocery_dev_password
+    # Exposé uniquement sur la machine (jamais sur le réseau local)
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -25,6 +26,11 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://grocery:grocery_dev_password@db:5432/grocery
       CORS_ORIGINS: "*"
+      SEED_DEMO: "true"
+      ENABLE_OPENFOODFACTS: "true"
+      ENABLE_OPEN_PRICES: "true"
+      ENABLE_OSM_IMPORT: "true"
+      UPLOAD_DIR: /app/uploads
     ports:
       - "8000:8000"
     depends_on:
@@ -32,6 +38,9 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - uploads:/app/uploads
 
 volumes:
   postgres_data:
+  uploads:
