@@ -63,6 +63,8 @@ export type Comparison = {
   deal: { percent: number; label: string } | null;
   sources: Record<string, number>;
   area: { radius_km: number; stores_in_area: number; osm_import: "imported" | "cached" | "failed" };
+  /** Rempli seulement quand aucun prix proche et récent n'existe : relevés plus loin / plus anciens. */
+  fallback: { radius_km: number; max_age_days: number; results: PriceRow[]; price_stats: PriceStats | null } | null;
 };
 
 export type Store = {

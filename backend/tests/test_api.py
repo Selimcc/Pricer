@@ -88,6 +88,23 @@ def test_comparison_one_current_price_per_store(client, factory, db):
     assert data["results"][0]["confidence_level"] in ("high", "medium", "low")
 
 
+def test_fallback_when_nothing_near_and_recent(client, factory):
+    p = factory.product()
+    paris = factory.store("Lidl", *FAR)                 # ~18 km
+    old_near = factory.store("Carrefour", *NEAR)
+    factory.price(p, paris, 4.19, days_ago=30)
+    factory.price(p, old_near, 4.59, days_ago=200)      # trop ancien pour la comparaison normale
+
+    data = client.get(f"/products/{p.ean}/comparison", params=q()).json()
+    assert data["results"] == []
+    fb = data["fallback"]
+    assert [r["chain"] for r in fb["results"]] == ["Carrefour", "Lidl"]  # du plus proche au plus loin
+    assert fb["price_stats"]["count"] == 2
+
+    factory.price(p, old_near, 4.49, days_ago=1)
+    assert client.get(f"/products/{p.ean}/comparison", params=q()).json()["fallback"] is None
+
+
 def test_disputed_price_falls_back_to_previous(client, factory, db):
     p = factory.product()
     a = factory.store("Carrefour", *NEAR)

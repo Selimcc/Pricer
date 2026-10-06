@@ -263,17 +263,43 @@ export function ProductScreen({ ean }: { ean: string }) {
             </Row>
           )}
 
-          {/* Aucun prix */}
+          {/* Aucun prix proche et récent */}
           {comparison && results.length === 0 && (
-            <EmptyState
-              icon="storefront-outline"
-              title={`Aucun prix à moins de ${SEARCH_RADIUS_KM} km`}
-              text={
-                comparison.area.osm_import === "failed" && comparison.area.stores_in_area === 0
-                  ? "La carte des magasins n'a pas pu être chargée (OpenStreetMap). Réessaie dans un moment."
-                  : "Tu es en magasin ? Relève le prix affiché : c'est ce qui rend l'app utile pour tout le monde."
-              }
-            />
+            <>
+              <EmptyState
+                icon="storefront-outline"
+                title={`Pas encore de prix récent à moins de ${SEARCH_RADIUS_KM} km`}
+                text={
+                  comparison.area.osm_import === "failed" && comparison.area.stores_in_area === 0
+                    ? "La carte des magasins n'a pas pu être chargée (OpenStreetMap). Réessaie dans un moment."
+                    : "Personne n'a encore relevé ce produit dans les magasins autour de toi. Tu es en magasin ? Relève le prix affiché : tu seras le premier."
+                }
+              />
+              {comparison.fallback && comparison.fallback.results.length > 0 && (
+                <>
+                  <SectionTitle>Les prix connus les plus proches</SectionTitle>
+                  <Text style={[type.small, { marginBottom: space.sm }]}>
+                    À titre indicatif : ces relevés sont plus loin ou plus anciens, le prix a pu changer.
+                    {comparison.fallback.price_stats && comparison.fallback.price_stats.count >= 3
+                      ? ` Prix habituel en France : ${money(comparison.fallback.price_stats.median)} (${comparison.fallback.price_stats.count} relevés sur un an).`
+                      : ""}
+                  </Text>
+                  <View style={styles.list}>
+                    {comparison.fallback.results.map((row) => (
+                      <Pressable key={row.observation_id} style={styles.fallbackRow} onPress={() => push({ name: "store", id: row.store_id })}>
+                        <View style={{ flex: 1, gap: 3 }}>
+                          <Text style={type.bodyStrong} numberOfLines={1}>{row.chain}</Text>
+                          <Text style={type.tiny} numberOfLines={1}>
+                            {[row.store_city, distance(row.distance_km), row.freshness_label.toLowerCase()].filter(Boolean).join(" · ")}
+                          </Text>
+                        </View>
+                        <PriceTag value={row.price} size="md" tone="muted" />
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              )}
+            </>
           )}
 
           {/* Tous les prix */}
@@ -460,5 +486,13 @@ const styles = StyleSheet.create({
   lineMain: { flexDirection: "row", alignItems: "center", gap: space.md, padding: space.lg },
   lineDetail: { paddingHorizontal: space.lg, paddingBottom: space.lg, gap: space.sm, backgroundColor: colors.surface },
   proof: { width: "100%", height: 180, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  fallbackRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.md,
+    padding: space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+  },
   storeLink: { flexDirection: "row", alignItems: "center", gap: 2, alignSelf: "flex-start", paddingVertical: space.xs },
 });
