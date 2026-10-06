@@ -85,13 +85,14 @@ def current_prices(
     products: list[Product],
     stores: list[tuple[Store, float]],
     user_id: str | None = None,
+    max_age_days: int | None = None,
 ) -> dict[tuple[int, int], dict]:
     """Prix actuel pour chaque couple (produit, magasin) -> ligne enrichie."""
     if not products or not stores:
         return {}
     product_by_id = {p.id: p for p in products}
     store_by_id = {s.id: (s, d) for s, d in stores}
-    since = datetime.now(timezone.utc) - timedelta(days=settings.price_max_age_days)
+    since = datetime.now(timezone.utc) - timedelta(days=max_age_days or settings.price_max_age_days)
 
     observations = db.scalars(
         select(PriceObservation)

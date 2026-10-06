@@ -14,6 +14,9 @@ from app.services.quantity import parse_quantity
 
 router = APIRouter(prefix="/products", tags=["Produits"])
 
+FALLBACK_RADIUS_KM = 50
+FALLBACK_MAX_AGE_DAYS = 365
+
 
 @router.get("/search", response_model=list[ProductOut])
 def search_products(q: str = Query(..., min_length=2, max_length=80), limit: int = Query(15, ge=1, le=50),
@@ -74,6 +77,21 @@ def comparison(
         row["savings_vs_best"] = round(row["price"] - best_price, 2)
 
     stats = pricing.price_stats(db, product)
+
+    # Rien de proche et récent : on montre quand même ce qu'on sait, à titre indicatif,
+    # plutôt que de répondre « aucun prix » alors que des relevés existent.
+    fallback = None
+    if not rows:
+        far_stores = geo.stores_within(db, latitude, longitude, FALLBACK_RADIUS_KM, limit=1000)
+        far_rows = pricing.current_prices(db, [product], far_stores, user_id, max_age_days=FALLBACK_MAX_AGE_DAYS)
+        nearest_rows = sorted(far_rows.values(), key=lambda r: r["distance_km"])[:5]
+        fallback = {
+            "radius_km": FALLBACK_RADIUS_KM,
+            "max_age_days": FALLBACK_MAX_AGE_DAYS,
+            "results": nearest_rows,
+            "price_stats": pricing.price_stats(db, product, days=FALLBACK_MAX_AGE_DAYS),
+        }
+
     nearest = min(rows, key=lambda r: r["distance_km"]) if rows else None
     sources: dict[str, int] = {}
     for r in rows:
@@ -89,6 +107,7 @@ def comparison(
         "price_stats": stats,
         "deal": pricing.deal_for(best_price, stats),
         "sources": sources,
+        "fallback": fallback,
         "area": {
             "radius_km": radius_km,
             "stores_in_area": len(stores),
