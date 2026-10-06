@@ -117,8 +117,20 @@ export function HomeScreen() {
         </View>
         {codeError && <Text style={[type.tiny, { color: colors.bad, marginTop: space.xs }]}>{codeError}</Text>}
 
+        {/* Ticket de caisse */}
+        <Pressable onPress={() => push({ name: "receipt" })} style={styles.listCard} accessibilityRole="button">
+          <View style={[styles.listIcon, { backgroundColor: colors.navySoft }]}>
+            <Ionicons name="receipt-outline" size={22} color={colors.ink} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={type.bodyStrong}>Scanner un ticket de caisse</Text>
+            <Text style={type.small}>Tous les prix de tes courses partagés en une photo.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </Pressable>
+
         {/* Liste */}
-        <Pressable onPress={() => setTab("list")} style={styles.listCard} accessibilityRole="button">
+        <Pressable onPress={() => setTab("list")} style={[styles.listCard, { marginTop: space.md }]} accessibilityRole="button">
           <View style={styles.listIcon}>
             <Ionicons name="cart-outline" size={22} color={colors.ink} />
           </View>

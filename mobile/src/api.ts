@@ -8,6 +8,8 @@ import type {
   ObservationResult,
   Product,
   PromotionType,
+  Receipt,
+  ReceiptSummary,
   RecentObservation,
   Store,
   StoreDetail,
@@ -133,6 +135,38 @@ export const api = {
     request<BasketComparison>(`/users/${userId}/list/comparison${qs({ ...at(coords), radius_km: SEARCH_RADIUS_KM })}`),
 
   recentObservations: (limit = 6) => request<RecentObservation[]>(`/observations/recent${qs({ limit })}`),
+
+  uploadReceipt: (userId: string, photoUri: string, coords?: Coords) => {
+    const form = new FormData();
+    form.append("user_id", userId);
+    if (coords) {
+      form.append("latitude", String(coords.latitude));
+      form.append("longitude", String(coords.longitude));
+    }
+    form.append("file", { uri: photoUri, name: "ticket.jpg", type: "image/jpeg" } as unknown as Blob);
+    return request<Receipt>("/receipts", { method: "POST", body: form });
+  },
+
+  receipts: (userId: string) => request<ReceiptSummary[]>(`/receipts${qs({ user_id: userId })}`),
+
+  receipt: (id: number, userId: string) => request<Receipt>(`/receipts/${id}${qs({ user_id: userId })}`),
+
+  updateReceipt: (id: number, userId: string, data: { store_id?: number }) =>
+    request<Receipt>(`/receipts/${id}`, { method: "PATCH", body: JSON.stringify({ user_id: userId, ...data }) }),
+
+  updateReceiptLine: (
+    id: number,
+    lineId: number,
+    userId: string,
+    data: { ean?: string; clear_product?: boolean; status?: "pending" | "ignored" },
+  ) =>
+    request<Receipt>(`/receipts/${id}/lines/${lineId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ user_id: userId, ...data }),
+    }),
+
+  publishReceipt: (id: number, userId: string) =>
+    request<Receipt>(`/receipts/${id}/publish`, { method: "POST", body: JSON.stringify({ user_id: userId }) }),
 
   contributions: (userId: string) => request<Contributions>(`/users/${userId}/contributions`),
 };

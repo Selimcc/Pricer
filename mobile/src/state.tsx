@@ -11,7 +11,8 @@ export type Route =
   | { name: "scanner"; mode: "lookup" | "list" }
   | { name: "product"; ean: string }
   | { name: "store"; id: number }
-  | { name: "createProduct"; ean: string };
+  | { name: "createProduct"; ean: string }
+  | { name: "receipt"; id?: number };
 
 export type LocationMode = "pending" | "gps" | "demo" | "denied";
 

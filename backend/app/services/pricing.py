@@ -17,7 +17,14 @@ from app.models import ObservationVote, PriceObservation, Product, Store
 from app.services.quantity import unit_price
 from app.services.scoring import confidence_for
 
-SOURCE_LABELS = {"community": "Communauté", "open_prices": "Open Prices", "demo": "Démo"}
+SOURCE_LABELS = {"community": "Communauté", "receipt": "Ticket de caisse", "open_prices": "Open Prices", "demo": "Démo"}
+
+
+def public_proof_url(url: str | None) -> str | None:
+    """Les tickets de caisse servent de preuve mais ne sont jamais montrés (données personnelles)."""
+    if url and (url.startswith("http") or url.startswith("/uploads/")):
+        return url
+    return None
 
 
 def vote_counts(db: Session, observation_ids: list[int]) -> dict[int, tuple[int, int]]:
@@ -70,7 +77,7 @@ def observation_row(obs: PriceObservation, store: Store, product: Product, dista
         "rejections": rejections,
         "confirmation_score": round((conf["community"] / 100 * 2 - 1) * 100, 1),
         "has_proof": bool(obs.proof_image_url),
-        "proof_image_url": obs.proof_image_url,
+        "proof_image_url": public_proof_url(obs.proof_image_url),
         "gps_verified": obs.gps_verified,
         "source": obs.source,
         "source_label": SOURCE_LABELS.get(obs.source, obs.source),

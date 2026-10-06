@@ -25,7 +25,7 @@ def utcnow():
 
 # Valeurs autorisées (gardées en String plutôt qu'en ENUM Postgres pour
 # pouvoir en ajouter sans migration lourde).
-PRICE_SOURCES = ("community", "open_prices", "demo")
+PRICE_SOURCES = ("community", "receipt", "open_prices", "demo")
 PROMOTION_TYPES = ("sale", "loyalty", "multi_buy", "bundle", "clearance", "coupon", "other")
 
 
@@ -129,3 +129,58 @@ class ShoppingListItem(Base):
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     checked: Mapped[bool] = mapped_column(Boolean, default=False)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Receipt(Base):
+    """Ticket de caisse photographié. L'image reste privée (jamais servie publiquement)."""
+
+    __tablename__ = "receipts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(100), index=True)
+    store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id"), nullable=True)
+    detected_chain: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    image_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    purchased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    total: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="parsed")  # parsed | published
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ReceiptLine(Base):
+    __tablename__ = "receipt_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    receipt_id: Mapped[int] = mapped_column(ForeignKey("receipts.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    label: Mapped[str] = mapped_column(String(255))
+    quantity: Mapped[Decimal] = mapped_column(Numeric(10, 3), default=1)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    discount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    discount_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_weighted: Mapped[bool] = mapped_column(Boolean, default=False)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True)
+    match_source: Mapped[str | None] = mapped_column(String(20), nullable=True)  # mapping | fuzzy | user
+    match_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | ignored | published
+    observation_id: Mapped[int | None] = mapped_column(ForeignKey("price_observations.id"), nullable=True)
+
+
+class ReceiptLabelMapping(Base):
+    """Mémoire collective : « chez Leclerc, la ligne CRISTALINE 1,5L = tel code-barres ».
+
+    Chaque ticket validé enrichit cette table ; les tickets suivants de tous
+    les utilisateurs se remplissent tout seuls.
+    """
+
+    __tablename__ = "receipt_label_mappings"
+    __table_args__ = (UniqueConstraint("chain_key", "label_key", name="uq_receipt_mapping"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    chain_key: Mapped[str] = mapped_column(String(100))
+    label_key: Mapped[str] = mapped_column(String(255), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
+    uses: Mapped[int] = mapped_column(Integer, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

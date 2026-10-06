@@ -6,19 +6,21 @@ import { API_URL, FORCE_DEMO_LOCATION } from "../config";
 import { relativeDate } from "../format";
 import { useApp } from "../state";
 import { colors, fonts, radius, space, type } from "../theme";
-import type { Contributions } from "../types";
+import type { Contributions, ReceiptSummary } from "../types";
 import { EmptyState, ErrorBox, Header, Loading, PriceTag, ProductThumb, Row, SectionTitle } from "../ui";
 
 export function ProfileScreen() {
   const { userId, push, useDemoLocation, setUseDemoLocation, locationMode } = useApp();
   const [data, setData] = useState<Contributions | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [receipts, setReceipts] = useState<ReceiptSummary[]>([]);
 
   const load = useCallback(async () => {
     if (!userId) return;
     setError(null);
     try {
       setData(await api.contributions(userId));
+      api.receipts(userId).then(setReceipts).catch(() => setReceipts([]));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Profil indisponible.");
     }
@@ -90,6 +92,27 @@ export function ProfileScreen() {
                 ))}
               </View>
             )}
+          </>
+        )}
+
+        {receipts.length > 0 && (
+          <>
+            <SectionTitle>Tes tickets</SectionTitle>
+            <View style={styles.list}>
+              {receipts.slice(0, 10).map((r) => (
+                <Pressable key={r.id} style={styles.row} onPress={() => push({ name: "receipt", id: r.id })}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={type.bodyStrong} numberOfLines={1}>{r.chain ?? "Magasin à préciser"}</Text>
+                    <Text style={type.tiny}>
+                      {relativeDate(r.purchased_at ?? r.created_at)} · {r.lines} ligne{r.lines > 1 ? "s" : ""}
+                    </Text>
+                  </View>
+                  <Text style={[type.tiny, { color: r.status === "published" ? colors.good : colors.bad }]}>
+                    {r.status === "published" ? "Publié" : "À finir"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </>
         )}
 

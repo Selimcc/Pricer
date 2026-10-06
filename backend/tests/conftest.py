@@ -20,6 +20,7 @@ os.environ.update({
     "ENABLE_OPEN_PRICES": "false",
     "ENABLE_OSM_IMPORT": "false",
     "UPLOAD_DIR": tempfile.mkdtemp(prefix="pricer-uploads-"),
+    "RECEIPTS_DIR": tempfile.mkdtemp(prefix="pricer-receipts-"),
 })
 
 import pytest  # noqa: E402
@@ -32,7 +33,8 @@ from app.migrate import upgrade_database  # noqa: E402
 from app.models import PriceObservation, Product, Store  # noqa: E402
 from app.services import ratelimit  # noqa: E402
 
-TABLES = "observation_votes, price_observations, shopping_list_items, osm_import_areas, stores, products"
+TABLES = ("receipt_lines, receipts, receipt_label_mappings, observation_votes, price_observations, "
+          "shopping_list_items, osm_import_areas, stores, products")
 
 # Maisons-Laffitte, pour des distances réalistes
 HOME = (48.9470, 2.1450)

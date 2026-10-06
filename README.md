@@ -11,7 +11,18 @@ Phase actuelle : on s'appuie sur les bases ouvertes pour démarrer (Open Food Fa
 
 - **Catalogue** : notre base d'abord, puis Open Food Facts (alimentation), Open Beauty Facts (hygiène, beauté), Open Pet Food Facts (animaux) et Open Products Facts (maison, entretien, le reste), interrogées en parallèle. Un produit inconnu partout est créé par l'utilisateur, avec photo. Une fiche sans photo peut être complétée par la communauté.
 - **Prix** : chaque prix garde sa source (`community`, `open_prices`, `demo`). Les données communautaires restent séparables des données ODbL.
-- **Objectif** : que notre base devienne la référence et que les sources externes ne servent plus qu'au premier scan. Prochaine étape pour y arriver : le ticket de caisse.
+- **Tickets de caisse** : une photo de ticket = tous les prix des courses. Chaque association « libellé du ticket → produit » validée par un utilisateur est mémorisée par enseigne : les tickets suivants de tout le monde se remplissent tout seuls. Cette mémoire collective est 100 % à nous.
+- **Objectif** : que notre base devienne la référence et que les sources externes ne servent plus qu'au premier scan.
+
+## Tickets de caisse (V0.5)
+
+1. L'utilisateur photographie son ticket. L'API le lit avec Tesseract (gratuit, local, inclus dans l'image Docker).
+2. Le texte est analysé : enseigne, date, total, articles, quantités (« 2 x 1,29 »), articles au poids, remises fidélité et bons de réduction.
+3. Le magasin est déduit de l'enseigne lue et de la position GPS.
+4. Chaque ligne est rapprochée d'un produit : mémoire collective d'abord, puis ressemblance avec le catalogue (abréviations gérées). L'utilisateur confirme, scanne l'article ou l'ignore.
+5. À la publication, chaque ligne devient un relevé de prix (source « Ticket de caisse », prix après remise, date d'achat réelle).
+
+La photo du ticket est stockée dans un volume privé (`receipts`), jamais servie par l'API : elle compte comme preuve mais n'est montrée à personne. Les articles au poids (fruits, légumes) sont lus mais pas encore publiés : il faudra des prix par catégorie au kilo.
 
 ## Ce qui change dans la V0.4
 
@@ -37,7 +48,7 @@ Phase actuelle : on s'appuie sur les bases ouvertes pour démarrer (Open Food Fa
 **Technique**
 - Migrations Alembic. Une base V0.2 existante est reconnue et migrée sans perte de données.
 - PostGIS réellement utilisé (`ST_DWithin` + index GiST) pour les recherches « autour de moi ».
-- API découpée en routers, 34 tests sur une vraie base PostGIS, CI GitHub Actions (backend + typecheck mobile).
+- API découpée en routers, 42 tests (dont un OCR réel) sur une vraie base PostGIS, CI GitHub Actions (backend + typecheck mobile).
 - App mobile découpée en écrans, nouvelle interface, navigation par onglets, identifiant anonyme persistant.
 
 ## Architecture
@@ -112,6 +123,8 @@ La base de test doit avoir PostGIS ; elle est vidée à chaque lancement.
 | `POST /observations` · `POST /observations/{id}/proof` · `POST /observations/{id}/vote` | relever, prouver, voter |
 | `GET/POST/PATCH/DELETE /users/{id}/list` · `GET /users/{id}/list/comparison` | liste de courses |
 | `GET /users/{id}/contributions` | profil contributeur |
+| `POST /receipts` · `GET /receipts` · `GET/PATCH /receipts/{id}` | ticket : photo, lecture, liste, correction |
+| `PATCH /receipts/{id}/lines/{line}` · `POST /receipts/{id}/publish` | associer une ligne, publier les prix |
 
 ## Configuration (variables d'environnement du backend)
 
@@ -126,7 +139,6 @@ La base de test doit avoir PostGIS ; elle est vidée à chaque lancement.
 
 ## Suite proposée
 
-1. **Ticket de caisse** : une photo = 20 à 40 prix datés et prouvés. C'est le levier principal contre le démarrage à froid.
 2. Comptes et réputation (V0.6), pour pondérer les votes.
 3. Graphique d'historique des prix dans la fiche produit (l'endpoint existe).
 4. Carte des magasins dans l'app.

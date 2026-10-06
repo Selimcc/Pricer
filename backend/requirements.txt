@@ -7,3 +7,5 @@ pydantic-settings==2.7.1
 httpx==0.28.1
 alembic==1.14.0
 python-multipart==0.0.20
+pytesseract==0.3.13
+Pillow==11.0.0

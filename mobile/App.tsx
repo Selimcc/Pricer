@@ -16,6 +16,7 @@ import { HomeScreen } from "./src/screens/HomeScreen";
 import { ListScreen } from "./src/screens/ListScreen";
 import { ProductScreen } from "./src/screens/ProductScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
+import { ReceiptScreen } from "./src/screens/ReceiptScreen";
 import { ScannerScreen } from "./src/screens/ScannerScreen";
 import { StoreScreen } from "./src/screens/StoreScreen";
 import { StoresScreen } from "./src/screens/StoresScreen";
@@ -114,6 +115,8 @@ function RouteView({ route }: { route: Route }) {
       return <StoreScreen id={route.id} />;
     case "createProduct":
       return <CreateProductScreen ean={route.ean} />;
+    case "receipt":
+      return <ReceiptScreen id={route.id} />;
   }
 }
 
