@@ -84,5 +84,8 @@ def scored_urls(db: Session, retailer: str, product: Product, limit: int = 5) ->
     return sorted(((round(score(all_words, brand, qty, slug), 2), url) for url, slug in rows), reverse=True)[:limit]
 
 
-def best_urls(db: Session, retailer: str, product: Product, limit: int = 2, threshold: float = 0.6) -> list[str]:
+def best_urls(db: Session, retailer: str, product: Product, limit: int = 4, threshold: float = 0.5) -> list[str]:
+    """Pages à visiter. Le seuil est bas exprès : chaque page est vérifiée par son EAN avant
+    d'accepter un prix, et chaque visite apprend l'EAN de la page pour les recherches suivantes
+    (les fiches Open Food Facts ont parfois un nom pauvre, ex. « isabelle » pour une Cristaline)."""
     return [url for s, url in scored_urls(db, retailer, product, limit) if s >= threshold]
