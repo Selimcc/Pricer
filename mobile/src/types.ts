@@ -182,6 +182,7 @@ export type RecentObservation = {
   promotion?: string | null;
   observed_at: string;
   source: string;
+  distance_km?: number | null;
   confidence_level: ConfidenceLevel;
 };
 

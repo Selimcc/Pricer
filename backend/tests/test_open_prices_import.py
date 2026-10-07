@@ -130,3 +130,31 @@ def test_worker_retries_failed_task_later(tmp_path, monkeypatch):
     assert worker.run_due(now) == ["x"]
     assert worker.run_due(now + timedelta(minutes=30)) == []  # pas de boucle d'échecs
     assert worker.run_due(now + timedelta(hours=1, minutes=5)) == ["x"]  # mais pas oubliée jusqu'à demain
+
+
+def test_enrich_completes_most_priced_stubs_first(db, monkeypatch):
+    from app.jobs import enrich
+
+    opi.import_items(db, [FLAT_ITEM, {**FLAT_ITEM, "id": 900009, "product_code": "3017620422003",
+                                      "product_name": None}], IDF, date(2000, 1, 1))
+    monkeypatch.setattr(enrich.settings, "enable_openfoodfacts", True)
+    monkeypatch.setattr(catalog, "lookup_ean", lambda ean: {"name": "Nutella", "brand": "Ferrero", "source": "off"}
+                        if ean == "3017620422003" else None)
+    stats = enrich.run(limit=10, delay_s=0)
+    assert stats == {"done": 2, "named": 1}
+    db.expire_all()
+    names = {p.ean: (p.name, p.source) for p in db.scalars(select(Product))}
+    assert names["3017620422003"] == ("Nutella", "off")
+    assert names["3274080005003"] == ("Cristaline 1,5 L", "open_prices")  # pas trouvé : on garde le nom, sans réessayer
+
+
+def test_recent_feed_around_me(client, db, factory):
+    p = factory.product()
+    near = factory.store("Carrefour Market")
+    far = factory.store("Monoprix", lat=45.76, lon=4.83)
+    factory.price(p, near, 4.10, days_ago=2)
+    factory.price(p, far, 3.90, days_ago=1)
+    from tests.conftest import HOME
+    rows = client.get("/observations/recent", params={"latitude": HOME[0], "longitude": HOME[1]}).json()
+    assert [r["chain"] for r in rows] == ["Carrefour Market"] and rows[0]["distance_km"] is not None
+    assert len(client.get("/observations/recent").json()) == 2
