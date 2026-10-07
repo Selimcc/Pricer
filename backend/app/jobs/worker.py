@@ -1,7 +1,7 @@
 """Tournée de nuit (service « worker » de docker compose).
 
 Chaque jour à WORKER_HOUR_UTC :
-- import Open Prices de la zone (si ENABLE_OPEN_PRICES) ;
+- import Open Prices de la zone (si ENABLE_OPEN_PRICES), puis fiches produits complétées (300 par nuit) ;
 - mise à jour des prix en ligne des produits suivis (si ENABLE_ONLINE_PRICES).
 Chaque lundi : indexation des sitemaps des enseignes (si ENABLE_ONLINE_PRICES).
 
@@ -37,6 +37,11 @@ def task_open_prices() -> None:
     run()
 
 
+def task_enrich() -> None:
+    from app.jobs.enrich import run
+    run()
+
+
 def task_online_refresh() -> None:
     from app.jobs.online import cmd_refresh
     db = SessionLocal()
@@ -58,6 +63,7 @@ def task_online_index() -> None:
 # (nom, fonction, actif ?, période : "daily" | "weekly")
 TASKS = [
     ("open_prices_import", task_open_prices, lambda: settings.enable_open_prices, "daily"),
+    ("enrich_products", task_enrich, lambda: settings.enable_openfoodfacts, "daily"),
     ("online_index", task_online_index, lambda: settings.enable_online_prices, "weekly"),
     ("online_refresh", task_online_refresh, lambda: settings.enable_online_prices, "daily"),
 ]
