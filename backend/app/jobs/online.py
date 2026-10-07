@@ -7,6 +7,7 @@
 """
 import argparse
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from sqlalchemy import func, select
 
@@ -34,11 +35,29 @@ def cmd_status(db) -> None:
               f"dernier statut : {state.last_status if state else '-'}")
 
 
+def _show_trace(trace: list, folder: Path) -> None:
+    """Détail des étapes ; chaque page reçue est enregistrée dans data/probe/lookup/ pour l'analyse."""
+    for n, step in enumerate(trace):
+        page = step.pop("page", None)
+        if page is not None:
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / f"{n:02d}.html"
+            path.write_text(f"<!-- {page.status} {page.url} -->\n{page.text}", encoding="utf-8")
+            step["fichier"] = str(path.relative_to(Path(settings.data_dir)))
+        if "scores" in step:
+            print(f"    {step['étape']} :")
+            for score, url in step["scores"]:
+                print(f"      {score:4.2f}  {url}")
+        else:
+            print("    " + " · ".join(f"{k}: {v}" for k, v in step.items()))
+
+
 def cmd_lookup(db, ean: str) -> None:
     product = resolve_product(db, ean)
-    print(f"{product.ean} · {product.brand or ''} {product.name} {product.quantity or ''}")
+    print(f"{product.ean} · marque « {product.brand or ''} » · nom « {product.name} » · {product.quantity or ''}")
     for r in online.enabled_retailers():
-        offer = online.lookup(db, r, product)
+        trace: list = []
+        offer = online.lookup(db, r, product, trace=trace)
         row = db.scalar(select(OnlineOffer).where(OnlineOffer.retailer == r.key, OnlineOffer.product_id == product.id))
         if offer:
             promo = f" (au lieu de {offer.regular_price} €)" if offer.is_promotion else ""
@@ -47,6 +66,7 @@ def cmd_lookup(db, ean: str) -> None:
             print(f"- {r.key:10} site bloqué : {db.get(OnlineRetailerState, r.key).last_status}")
         else:
             print(f"- {r.key:10} pas trouvé{(' : ' + row.error) if row and row.error else ''}")
+        _show_trace(trace, Path(settings.data_dir) / "probe" / "lookup" / f"{r.key}-{product.ean}")
 
 
 def cmd_index(db, keys: list[str]) -> None:

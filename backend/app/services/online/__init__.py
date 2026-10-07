@@ -27,7 +27,7 @@ from app.core.config import settings
 from app.db import SessionLocal
 from app.models import OnlineCatalogUrl, OnlineOffer, OnlineRetailerState, PriceObservation, Product, Store
 from app.services.online import http
-from app.services.online.matching import best_urls
+from app.services.online.matching import best_urls, scored_urls
 from app.services.online.parse import declared_eans, find_offer, page_gtins
 from app.services.online.retailers import RETAILERS, Retailer
 
@@ -80,8 +80,8 @@ def is_fresh(offer: OnlineOffer | None) -> bool:
 
 # ---------------------------------------------------------------- recherche d'une page
 
-def candidate_urls(db: Session, client: http.PoliteClient, retailer: Retailer, product: Product
-                   ) -> tuple[list[str], http.Page | None]:
+def candidate_urls(db: Session, client: http.PoliteClient, retailer: Retailer, product: Product,
+                   trace: list | None = None) -> tuple[list[str], http.Page | None]:
     """Adresses à essayer, et éventuellement une page déjà téléchargée (recherche -> fiche)."""
     if retailer.direct:
         return [retailer.direct(product.ean)], None
@@ -96,6 +96,8 @@ def candidate_urls(db: Session, client: http.PoliteClient, retailer: Retailer, p
         links = re.findall(retailer.link_re.format(ean=re.escape(product.ean)), page.text) if retailer.link_re else []
         return [httpx.URL(retailer.base_url).join(link).__str__() for link in dict.fromkeys(links)][:2], None
     if retailer.use_sitemaps:
+        if trace is not None:
+            trace.append({"étape": "candidats sitemap", "scores": scored_urls(db, retailer.key, product)})
         return best_urls(db, retailer.key, product), None
     return [], None
 
@@ -119,26 +121,36 @@ def _learn_ean(db: Session, retailer: str, url: str, gtins: set[str]) -> None:
         db.commit()
 
 
-def lookup(db: Session, retailer: Retailer, product: Product, client: http.PoliteClient | None = None) -> OnlineOffer | None:
-    """Cherche le prix d'un produit sur un site et met le cache à jour."""
+def lookup(db: Session, retailer: Retailer, product: Product, client: http.PoliteClient | None = None,
+           trace: list | None = None) -> OnlineOffer | None:
+    """Cherche le prix d'un produit sur un site et met le cache à jour.
+
+    `trace` (facultatif) reçoit le détail de chaque étape, pour le diagnostic.
+    """
     client = client or http.client()
+    note = trace.append if trace is not None else (lambda _: None)
     if is_blocked(db, retailer.key):
+        note({"étape": "site en pause après un blocage"})
         return None
     if retailer.use_sitemaps and not db.scalar(
             select(OnlineCatalogUrl.id).where(OnlineCatalogUrl.retailer == retailer.key).limit(1)):
-        return None  # sitemaps pas encore indexés : ne pas noter le produit comme absent
+        note({"étape": "sitemaps pas encore indexés (lancer : online index)"})
+        return None  # ne pas noter le produit comme absent
     try:
-        urls, ready = candidate_urls(db, client, retailer, product)
+        urls, ready = candidate_urls(db, client, retailer, product, trace)
+        note({"étape": "pages à essayer", "urls": urls})
         for url in urls:
             page = ready if ready and ready.url == url else client.get(url)
+            gtins = page_gtins(page.text) | declared_eans(page.text)
+            note({"étape": "page", "url": page.url, "statut": page.status, "eans_page": sorted(gtins)[:5],
+                  "page": page})
             if page.status == 404:
                 continue
-            gtins = page_gtins(page.text) | declared_eans(page.text)
             if gtins and retailer.use_sitemaps:
                 _learn_ean(db, retailer.key, url, gtins)
-            offer = find_offer(page.text, product.ean)
-            if offer is None and retailer.extract:
-                offer = retailer.extract(page.text, product.ean)
+            # Le lecteur propre au site d'abord : il sait où est l'offre principale de la page
+            offer = retailer.extract(page.text, product.ean) if retailer.extract else None
+            offer = offer or find_offer(page.text, product.ean)
             if offer:
                 _save(db, retailer.key, product.id, found=True, price=offer.price, regular_price=offer.regular_price,
                       is_promotion=offer.is_promotion, url=page.url)

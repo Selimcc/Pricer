@@ -66,7 +66,8 @@ def score(product_words: set[str], brand_words: set[str], qty: list[str], slug: 
     return overlap + bonus
 
 
-def best_urls(db: Session, retailer: str, product: Product, limit: int = 2, threshold: float = 0.6) -> list[str]:
+def scored_urls(db: Session, retailer: str, product: Product, limit: int = 5) -> list[tuple[float, str]]:
+    """Meilleures pages candidates avec leur score (pour le diagnostic)."""
     brand = set(words(product.brand or "")[:2])
     name = set(words(product.name or ""))
     all_words = brand | name
@@ -80,5 +81,8 @@ def best_urls(db: Session, retailer: str, product: Product, limit: int = 2, thre
         .limit(3000)
     ).all()
     qty = quantity_variants(product)
-    ranked = sorted(((score(all_words, brand, qty, slug), url) for url, slug in rows), reverse=True)
-    return [url for s, url in ranked[:limit] if s >= threshold]
+    return sorted(((round(score(all_words, brand, qty, slug), 2), url) for url, slug in rows), reverse=True)[:limit]
+
+
+def best_urls(db: Session, retailer: str, product: Product, limit: int = 2, threshold: float = 0.6) -> list[str]:
+    return [url for s, url in scored_urls(db, retailer, product, limit) if s >= threshold]
