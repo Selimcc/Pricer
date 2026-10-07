@@ -25,7 +25,8 @@ def utcnow():
 
 # Valeurs autorisées (gardées en String plutôt qu'en ENUM Postgres pour
 # pouvoir en ajouter sans migration lourde).
-PRICE_SOURCES = ("community", "receipt", "open_prices", "demo")
+# « online » : prix lus sur les sites des enseignes (phase de test, jamais publics)
+PRICE_SOURCES = ("community", "receipt", "open_prices", "online", "demo")
 PROMOTION_TYPES = ("sale", "loyalty", "multi_buy", "bundle", "clearance", "coupon", "other")
 
 
@@ -183,4 +184,53 @@ class ReceiptLabelMapping(Base):
     label_key: Mapped[str] = mapped_column(String(255), index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
     uses: Mapped[int] = mapped_column(Integer, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class OnlineOffer(Base):
+    """Dernier prix lu sur le site d'une enseigne pour un produit (ou son absence).
+
+    Sert de cache : un site n'est jamais interrogé deux fois de suite pour le
+    même produit. Les relevés affichés dans l'app sont recopiés d'ici vers les
+    magasins de l'enseigne autour de l'utilisateur (source « online »).
+    """
+
+    __tablename__ = "online_offers"
+    __table_args__ = (UniqueConstraint("retailer", "product_id", name="uq_online_offer"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    retailer: Mapped[str] = mapped_column(String(30))
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    found: Mapped[bool] = mapped_column(Boolean, default=False)
+    price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    regular_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    is_promotion: Mapped[bool] = mapped_column(Boolean, default=False)
+    url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class OnlineCatalogUrl(Base):
+    """Pages produit listées dans les sitemaps des enseignes (fichiers publiés pour les robots)."""
+
+    __tablename__ = "online_catalog_urls"
+    __table_args__ = (UniqueConstraint("retailer", "url", name="uq_online_catalog_url"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    retailer: Mapped[str] = mapped_column(String(30), index=True)
+    url: Mapped[str] = mapped_column(Text)
+    slug: Mapped[str] = mapped_column(Text)  # mots de l'adresse, normalisés, pour la recherche
+    ean: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    indexed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class OnlineRetailerState(Base):
+    """État d'un site : bloqué ou non, dernier statut, dernière indexation."""
+
+    __tablename__ = "online_retailer_state"
+
+    retailer: Mapped[str] = mapped_column(String(30), primary_key=True)
+    blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_status: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sitemap_indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     enable_openfoodfacts: bool = True
     enable_open_prices: bool = True
     enable_osm_import: bool = True
-    http_user_agent: str = "Pricer/0.4 (prototype; github.com/Selimcc/Pricer)"
+    http_user_agent: str = "Pricer/0.6 (prototype; github.com/Selimcc/Pricer)"
     overpass_url: str = "https://overpass-api.de/api/interpreter"
     open_prices_url: str = "https://prices.openfoodfacts.org/api/v1"
 
@@ -39,6 +39,30 @@ class Settings(BaseSettings):
     enable_ocr: bool = True
     ocr_languages: str = "fra"
     max_upload_mb: int = 8
+
+    # Dossier de travail des tâches de fond (exports téléchargés, diagnostics)
+    data_dir: str = "/app/data"
+
+    # Import complet d'Open Prices (export quotidien) pour une zone.
+    # Zone = « lat_min,lon_min,lat_max,lon_max » ; par défaut l'Île-de-France.
+    open_prices_export_url: str = "https://prices.openfoodfacts.org/data/prices.jsonl.gz"
+    import_bbox: str = "48.12,1.44,49.24,3.56"
+    open_prices_import_days: int = 365
+
+    # Prix des sites des enseignes (phase de test, usage personnel).
+    # Désactivé par défaut : ces prix ne doivent jamais apparaître dans une version publique.
+    enable_online_prices: bool = False
+    online_retailers: str = "carrefour,leclerc,auchan,monoprix,franprix"
+    online_user_agent: str = "Pricer/0.6 (test personnel, non commercial)"
+    online_min_delay_s: float = 4.0          # entre deux pages d'un même site
+    online_cache_hours: int = 24             # un prix trouvé n'est pas redemandé avant
+    online_miss_cache_days: int = 7          # produit absent du site : on ne redemande pas avant
+    online_wait_s: float = 8.0               # attente max pendant l'affichage d'une fiche produit
+    online_daily_cap: int = 400              # pages max par site et par jour
+    online_block_hours: int = 24             # un site qui bloque est laissé tranquille
+
+    # Tâches planifiées (service « worker ») : heure UTC de la tournée de nuit (2 h UTC = 4 h à Paris l'été)
+    worker_hour_utc: int = 2
 
 
 settings = Settings()

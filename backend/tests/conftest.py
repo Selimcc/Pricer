@@ -34,7 +34,8 @@ from app.models import PriceObservation, Product, Store  # noqa: E402
 from app.services import ratelimit  # noqa: E402
 
 TABLES = ("receipt_lines, receipts, receipt_label_mappings, observation_votes, price_observations, "
-          "shopping_list_items, osm_import_areas, stores, products")
+          "shopping_list_items, osm_import_areas, online_offers, online_catalog_urls, online_retailer_state, "
+          "stores, products")
 
 # Maisons-Laffitte, pour des distances réalistes
 HOME = (48.9470, 2.1450)
