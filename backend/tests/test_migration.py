@@ -34,7 +34,7 @@ def test_v02_database_is_migrated_without_data_loss():
         upgrade_database(engine)
 
         with engine.connect() as conn:
-            assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0004"
+            assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0005"
             assert conn.scalar(text("SELECT name FROM products WHERE ean = '3254381025887'")) == "Mon produit scanné"
             row = conn.execute(text("SELECT source, promotion_type FROM price_observations")).one()
             assert tuple(row) == ("demo", "loyalty")

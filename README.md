@@ -1,4 +1,4 @@
-# Pricer — prix alimentaires communautaires (V0.4)
+# Pricer — prix alimentaires communautaires (V0.6)
 
 Scanner un produit, voir où il est le moins cher autour de soi, et savoir dans quel magasin faire sa liste de courses.
 Les prix viennent de la communauté (relevés datés, géolocalisés, avec photo) et d'Open Prices ; les magasins réels viennent d'OpenStreetMap.
@@ -13,6 +13,12 @@ Phase actuelle : on s'appuie sur les bases ouvertes pour démarrer (Open Food Fa
 - **Prix** : chaque prix garde sa source (`community`, `open_prices`, `demo`). Les données communautaires restent séparables des données ODbL.
 - **Tickets de caisse** : une photo de ticket = tous les prix des courses. Chaque association « libellé du ticket → produit » validée par un utilisateur est mémorisée par enseigne : les tickets suivants de tout le monde se remplissent tout seuls. Cette mémoire collective est 100 % à nous.
 - **Objectif** : que notre base devienne la référence et que les sources externes ne servent plus qu'au premier scan.
+
+## Prix réels dès le départ (V0.6)
+
+- **Open Prices en entier** : chaque nuit, le service `worker` télécharge l'export complet d'Open Prices et importe tous les prix récents de la zone (`IMPORT_BBOX`, Île-de-France par défaut). Les magasins ont des prix avant le premier scan ; une fiche importée (nom seul) est complétée au premier scan.
+- **Sites des enseignes, test personnel uniquement** (`ENABLE_ONLINE_PRICES=true`, désactivé par défaut) : à l'ouverture d'une fiche, l'API lit le prix du produit sur carrefour.fr, e.leclerc, auchan.fr, courses.monoprix.fr, franprix.fr dans la description produit des pages (schema.org), en vérifiant l'EAN. robots.txt respecté, une page à la fois par site, plafond quotidien, pause de 24 h pour un site qui bloque : on ne contourne aucune protection. Le prix est affiché dans les magasins de l'enseigne autour de l'utilisateur (« Prix carrefour.fr »). Source `online`, masquée dès que l'option est coupée, supprimée par `python -m app.jobs.purge --online`. Ces prix ne doivent jamais faire partie d'une version publique (conditions d'utilisation des sites, droit des bases de données).
+- **Serveur maison** : PC de bureau + tunnel Cloudflare nommé sur un domaine (adresse fixe), sauvegarde nocturne. Voir [DEPLOIEMENT.md](DEPLOIEMENT.md).
 
 ## Tickets de caisse (V0.5)
 
@@ -49,7 +55,7 @@ La photo du ticket est stockée dans un volume privé (`receipts`), jamais servi
 **Technique**
 - Migrations Alembic. Une base V0.2 existante est reconnue et migrée sans perte de données.
 - PostGIS réellement utilisé (`ST_DWithin` + index GiST) pour les recherches « autour de moi ».
-- API découpée en routers, 45 tests (dont un OCR réel) sur une vraie base PostGIS, CI GitHub Actions (backend + typecheck mobile).
+- API découpée en routers, tests (dont un OCR réel) sur une vraie base PostGIS, CI GitHub Actions (backend + typecheck mobile).
 - App mobile découpée en écrans, nouvelle interface, navigation par onglets, identifiant anonyme persistant.
 
 ## Architecture
@@ -156,11 +162,23 @@ La base de test doit avoir PostGIS ; elle est vidée à chaque lancement.
 - Les photos sont stockées sur le disque du conteneur (volume `uploads`).
 - Overpass (OSM) est un service public gratuit : il peut être lent ou refuser des requêtes en cas d'abus.
 
+## Tâches (dans le conteneur de l'API)
+
+```bash
+docker compose exec api python -m app.jobs.open_prices_import   # import Open Prices de la zone
+docker compose exec api python -m app.jobs.probe                # diagnostic des sites des enseignes
+docker compose exec api python -m app.jobs.online status        # prix en ligne : état par enseigne
+docker compose exec api python -m app.jobs.online lookup <EAN>  # tester un produit
+docker compose exec api python -m app.jobs.purge --online       # supprimer les prix en ligne
+docker compose exec api python -m app.jobs.purge --demo         # supprimer la démo (SEED_DEMO=false)
+```
+
 ## Suite proposée
 
-1. Prix au kilo par catégorie (fruits, légumes, rayon trad) pour publier les articles au poids des tickets.
-2. Comptes et réputation (V0.6), pour pondérer les votes.
-3. Carte des magasins dans l'app.
-4. Tunnel nommé avec un nom de domaine (adresse fixe), puis AWS seulement une fois l'usage validé.
+1. Ajuster les lecteurs des enseignes d'après le diagnostic (`probe`) lancé depuis le PC de bureau.
+2. Prix au kilo par catégorie (fruits, légumes, rayon trad) pour publier les articles au poids des tickets.
+3. Comptes et réputation, pour pondérer les votes.
+4. Carte des magasins dans l'app.
+5. App installable (TestFlight + EAS Update) quand d'autres personnes testeront ; AWS seulement une fois l'usage validé.
 
 Données : prix Open Prices et magasins © contributeurs OpenStreetMap, sous licence ODbL ; fiches produits Open Food Facts.

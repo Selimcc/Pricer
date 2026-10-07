@@ -54,7 +54,8 @@ def nearby_stores(
         counts = {
             sid: (n, last) for sid, n, last in db.execute(
                 select(PriceObservation.store_id, func.count(), func.max(PriceObservation.observed_at))
-                .where(PriceObservation.store_id.in_([s.id for s, _ in stores]), PriceObservation.observed_at >= since)
+                .where(PriceObservation.store_id.in_([s.id for s, _ in stores]), PriceObservation.observed_at >= since,
+                       pricing.visible())
                 .group_by(PriceObservation.store_id)
             ).all()
         }
@@ -72,7 +73,7 @@ def store_detail(store_id: int, latitude: float | None = None, longitude: float 
     since = datetime.now(timezone.utc) - timedelta(days=settings.price_max_age_days)
     product_ids = db.scalars(
         select(PriceObservation.product_id)
-        .where(PriceObservation.store_id == store.id, PriceObservation.observed_at >= since)
+        .where(PriceObservation.store_id == store.id, PriceObservation.observed_at >= since, pricing.visible())
         .group_by(PriceObservation.product_id)
         .order_by(func.max(PriceObservation.observed_at).desc())
         .limit(50)

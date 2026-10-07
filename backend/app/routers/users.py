@@ -12,7 +12,7 @@ from app.db import get_db
 from app.models import ObservationVote, PriceObservation, Product, ShoppingListItem, Store
 from app.routers.deps import api_error, resolve_product, valid_user_id
 from app.schemas import ListItemCreate, ListItemUpdate, ProductOut
-from app.services import geo, osm, pricing
+from app.services import geo, online, osm, pricing
 from app.services.providers import sync_product_prices
 
 router = APIRouter(prefix="/users/{user_id}", tags=["Utilisateur"])
@@ -130,6 +130,8 @@ def compare_list(
         sync_product_prices(db, p)
     qty = {p.id: i.quantity for i, p in entries}
     stores = geo.stores_within(db, latitude, longitude, radius_km)
+    # Prix en ligne déjà connus (pas de requête vers les sites ici : la liste peut être longue)
+    online.attach(db, products, stores)
     rows = pricing.current_prices(db, products, stores)
     by_store = pricing.group_by_store(rows)
 

@@ -25,6 +25,8 @@ def recent_observations(limit: int = Query(12, ge=1, le=100), db: Session = Depe
         select(PriceObservation, Product, Store)
         .join(Product, Product.id == PriceObservation.product_id)
         .join(Store, Store.id == PriceObservation.store_id)
+        # Le fil « derniers relevés » montre l'activité des gens, pas les imports automatiques
+        .where(PriceObservation.source.not_in(("online",)))
         .order_by(PriceObservation.observed_at.desc(), PriceObservation.id.desc())
         .limit(limit)
     ).all()
