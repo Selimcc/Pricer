@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, true
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -17,7 +17,27 @@ from app.models import ObservationVote, PriceObservation, Product, Store
 from app.services.quantity import unit_price
 from app.services.scoring import confidence_for
 
-SOURCE_LABELS = {"community": "Communauté", "open_prices": "Open Prices", "demo": "Démo"}
+SOURCE_LABELS = {"community": "Communauté", "receipt": "Ticket de caisse", "open_prices": "Open Prices",
+                 "online": "Prix en ligne", "demo": "Démo"}
+
+
+def visible():
+    """Filtre des relevés montrables : les prix lus en ligne n'existent que si l'option est active."""
+    return true() if settings.enable_online_prices else PriceObservation.source != "online"
+
+
+def source_label(obs: PriceObservation) -> str:
+    if obs.source == "online":
+        from app.services.online import label_for
+        return label_for(obs.user_id)
+    return SOURCE_LABELS.get(obs.source, obs.source)
+
+
+def public_proof_url(url: str | None) -> str | None:
+    """Les tickets de caisse servent de preuve mais ne sont jamais montrés (données personnelles)."""
+    if url and (url.startswith("http") or url.startswith("/uploads/")):
+        return url
+    return None
 
 
 def vote_counts(db: Session, observation_ids: list[int]) -> dict[int, tuple[int, int]]:
@@ -70,10 +90,10 @@ def observation_row(obs: PriceObservation, store: Store, product: Product, dista
         "rejections": rejections,
         "confirmation_score": round((conf["community"] / 100 * 2 - 1) * 100, 1),
         "has_proof": bool(obs.proof_image_url),
-        "proof_image_url": obs.proof_image_url,
+        "proof_image_url": public_proof_url(obs.proof_image_url),
         "gps_verified": obs.gps_verified,
         "source": obs.source,
-        "source_label": SOURCE_LABELS.get(obs.source, obs.source),
+        "source_label": source_label(obs),
         "is_mine": bool(user_id) and obs.user_id == user_id,
         "my_vote": user_vote,
         **conf,
@@ -100,6 +120,7 @@ def current_prices(
             PriceObservation.product_id.in_(product_by_id),
             PriceObservation.store_id.in_(store_by_id),
             PriceObservation.observed_at >= since,
+            visible(),
         )
         .order_by(PriceObservation.observed_at.desc(), PriceObservation.id.desc())
     ).all()
@@ -133,6 +154,7 @@ def price_stats(db: Session, product: Product, days: int = 90) -> dict | None:
             PriceObservation.product_id == product.id,
             PriceObservation.observed_at >= since,
             PriceObservation.flagged.is_(False),
+            visible(),
         )
     ).all()]
     if not prices:
@@ -163,6 +185,7 @@ def recent_median(db: Session, product_id: int, days: int = 90) -> tuple[float |
             PriceObservation.product_id == product_id,
             PriceObservation.observed_at >= since,
             PriceObservation.flagged.is_(False),
+            visible(),
         )
     ).all()]
     return (median(prices) if prices else None), len(prices)

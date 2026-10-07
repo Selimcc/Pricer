@@ -12,6 +12,11 @@ const MODES = {
     hint: "Cadre l'étiquette entière : prix, nom du produit, prix au kilo.",
     permission: "La photo prouve le prix affiché. Elle est rattachée à ton relevé et visible par la communauté.",
   },
+  receipt: {
+    title: "Ticket de caisse",
+    hint: "Ticket bien à plat, entier dans l'image et bien éclairé. Pour un long ticket, recule un peu.",
+    permission: "La photo du ticket sert à lire les prix. Elle reste privée : seuls les prix sont partagés.",
+  },
   product: {
     title: "Photo du produit",
     hint: "Face avant de l'emballage, bien droite et lisible.",
@@ -41,7 +46,7 @@ export function ProofCamera({
     if (!camera.current || taking) return;
     setTaking(true);
     try {
-      const photo = await camera.current.takePictureAsync({ quality: 0.5, skipProcessing: false });
+      const photo = await camera.current.takePictureAsync({ quality: mode === "receipt" ? 0.85 : 0.5 });
       if (photo?.uri) onCapture(photo.uri);
     } finally {
       setTaking(false);

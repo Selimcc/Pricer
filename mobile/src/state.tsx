@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import { getBaseUrl, setBaseUrl } from "./api";
 import { DEMO_COORDS, FORCE_DEMO_LOCATION } from "./config";
 import type { Coords, Product } from "./types";
 
@@ -11,7 +12,8 @@ export type Route =
   | { name: "scanner"; mode: "lookup" | "list" }
   | { name: "product"; ean: string }
   | { name: "store"; id: number }
-  | { name: "createProduct"; ean: string };
+  | { name: "createProduct"; ean: string }
+  | { name: "receipt"; id?: number };
 
 export type LocationMode = "pending" | "gps" | "demo" | "denied";
 
@@ -24,6 +26,8 @@ type AppState = {
   locationMode: LocationMode;
   refreshLocation: () => Promise<Coords>;
   useDemoLocation: boolean;
+  serverUrl: string;
+  setServerUrl: (url: string | null) => void;
   setUseDemoLocation: (v: boolean) => void;
 
   tab: Tab;
@@ -45,7 +49,7 @@ type AppState = {
 
 const Ctx = createContext<AppState | null>(null);
 
-const KEYS = { user: "pricer.userId", recent: "pricer.recent", demo: "pricer.demoLocation" };
+const KEYS = { user: "pricer.userId", recent: "pricer.recent", demo: "pricer.demoLocation", server: "pricer.serverUrl" };
 
 const newUserId = () => `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -56,6 +60,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [locationMode, setLocationMode] = useState<LocationMode>("pending");
   const [useDemoLocation, setDemo] = useState(FORCE_DEMO_LOCATION);
   const [tab, setTab] = useState<Tab>("home");
+  const [serverUrl, setServer] = useState(getBaseUrl());
   const [stack, setStack] = useState<Route[]>([]);
   const [toast, setToast] = useState<Toast | null>(null);
   const [recent, setRecent] = useState<Product[]>([]);
@@ -75,6 +80,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const stored = await AsyncStorage.getItem(KEYS.recent);
         if (stored) setRecent(JSON.parse(stored));
         if (!FORCE_DEMO_LOCATION) setDemo((await AsyncStorage.getItem(KEYS.demo)) === "true");
+        const server = await AsyncStorage.getItem(KEYS.server);
+        if (server) {
+          setBaseUrl(server);
+          setServer(getBaseUrl());
+        }
       } catch {
         setUserId(newUserId());
       } finally {
@@ -122,6 +132,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(KEYS.demo, v ? "true" : "false").catch(() => {});
   }, []);
 
+  const setServerUrl = useCallback((url: string | null) => {
+    setBaseUrl(url);
+    setServer(getBaseUrl());
+    if (url && url.trim()) AsyncStorage.setItem(KEYS.server, getBaseUrl()).catch(() => {});
+    else AsyncStorage.removeItem(KEYS.server).catch(() => {});
+  }, []);
+
   const showToast = useCallback((message: string, kind: Toast["kind"] = "info") => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ id: Date.now(), message, kind });
@@ -145,6 +162,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       refreshLocation,
       useDemoLocation,
       setUseDemoLocation,
+      serverUrl,
+      setServerUrl,
       tab,
       setTab: (t) => {
         setStack([]);
@@ -161,7 +180,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       listVersion,
       bumpList: () => setListVersion((v) => v + 1),
     }),
-    [ready, userId, coords, locationMode, refreshLocation, useDemoLocation, setUseDemoLocation, tab, stack, toast,
+    [ready, userId, coords, locationMode, refreshLocation, useDemoLocation, setUseDemoLocation, serverUrl, setServerUrl, tab, stack, toast,
       showToast, recent, rememberProduct, listVersion],
   );
 

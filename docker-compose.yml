@@ -1,3 +1,32 @@
+name: grocery-waze
+
+# Réglages communs à l'API et au worker (valeurs dans le fichier .env à la racine)
+x-api-env: &api-env
+  DATABASE_URL: postgresql+psycopg://grocery:grocery_dev_password@db:5432/grocery
+  CORS_ORIGINS: "*"
+  # Clé exigée pour les requêtes venant du tunnel
+  APP_API_KEY: ${APP_API_KEY:-}
+  SEED_DEMO: ${SEED_DEMO:-true}
+  ENABLE_OPENFOODFACTS: "true"
+  ENABLE_OPEN_PRICES: "true"
+  ENABLE_OSM_IMPORT: "true"
+  IMPORT_BBOX: ${IMPORT_BBOX:-48.12,1.44,49.24,3.56}
+  ENABLE_ONLINE_PRICES: ${ENABLE_ONLINE_PRICES:-false}
+  ONLINE_RETAILERS: ${ONLINE_RETAILERS:-auchan}
+  # Ancienneté max d'un prix affiché (jours). 365 en phase de test : peu de prix récents autour de toi
+  PRICE_MAX_AGE_DAYS: ${PRICE_MAX_AGE_DAYS:-120}
+  UPLOAD_DIR: /app/uploads
+  RECEIPTS_DIR: /app/receipts
+  DATA_DIR: /app/data
+
+x-api-volumes: &api-volumes
+  - ./backend/app:/app/app
+  - ./backend/alembic:/app/alembic
+  - uploads:/app/uploads
+  - receipts:/app/receipts
+  # Exports téléchargés, diagnostics des sites : visibles dans le dossier data/ du projet
+  - ./data:/app/data
+
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -23,24 +52,77 @@ services:
       context: ./backend
     container_name: grocery-waze-api
     restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql+psycopg://grocery:grocery_dev_password@db:5432/grocery
-      CORS_ORIGINS: "*"
-      SEED_DEMO: "true"
-      ENABLE_OPENFOODFACTS: "true"
-      ENABLE_OPEN_PRICES: "true"
-      ENABLE_OSM_IMPORT: "true"
-      UPLOAD_DIR: /app/uploads
+    environment: *api-env
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+    volumes: *api-volumes
+
+  # Tâches de nuit : import Open Prices de la zone, prix en ligne (si activés)
+  worker:
+    build:
+      context: ./backend
+    container_name: grocery-waze-worker
+    restart: unless-stopped
+    command: python -m app.jobs.worker
+    environment: *api-env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes: *api-volumes
+
+  # Accès depuis Internet, adresse temporaire : docker compose --profile tunnel up -d
+  # L'adresse publique (https://xxx.trycloudflare.com) s'affiche dans : docker compose logs tunnel
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: grocery-waze-tunnel
+    restart: unless-stopped
+    # HTTP/2 plutôt que QUIC (UDP), souvent bloqué par les box et Docker sous Windows
+    command: tunnel --no-autoupdate --protocol http2 --url http://api:8000
+    depends_on:
+      - api
+    profiles: ["tunnel"]
+
+  # ---- PC serveur : docker compose --profile server up -d (voir DEPLOIEMENT.md) ----
+
+  # Tunnel nommé : adresse fixe sur ton domaine (jeton dans .env : CLOUDFLARE_TUNNEL_TOKEN)
+  tunnel-named:
+    image: cloudflare/cloudflared:latest
+    container_name: grocery-waze-tunnel-named
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --protocol http2 run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - api
+    profiles: ["server"]
+
+  # Sauvegarde de la base chaque nuit dans le dossier backups/ (14 jours gardés)
+  backup:
+    image: postgis/postgis:16-3.4
+    container_name: grocery-waze-backup
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: grocery_dev_password
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        while true; do
+          f=/backups/pricer-$$(date +%Y-%m-%d).sql.gz
+          pg_dump -h db -U grocery grocery | gzip > "$$f.part" && mv "$$f.part" "$$f" && echo "sauvegarde $$f"
+          find /backups -name 'pricer-*.sql.gz' -mtime +14 -delete
+          sleep 86400
+        done
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
-      - ./backend/app:/app/app
-      - ./backend/alembic:/app/alembic
-      - uploads:/app/uploads
+      - ./backups:/backups
+    profiles: ["server"]
 
 volumes:
   postgres_data:
   uploads:
+  receipts:

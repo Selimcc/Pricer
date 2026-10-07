@@ -6,12 +6,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError, api, imageUrl } from "../api";
 import { ContributeSheet } from "../components/ContributeSheet";
+import { PriceHistoryChart } from "../components/PriceHistoryChart";
 import { ProofCamera } from "../components/ProofCamera";
 import { SEARCH_RADIUS_KM } from "../config";
 import { distance, money, perUnit, signedMoney } from "../format";
 import { useApp } from "../state";
 import { colors, fonts, radius, space, type } from "../theme";
-import type { Comparison, PriceRow, Product } from "../types";
+import type { Comparison, PriceHistory, PriceRow, Product } from "../types";
 import {
   Button,
   Confidence,
@@ -41,11 +42,14 @@ export function ProductScreen({ ean }: { ean: string }) {
   const [proofFor, setProofFor] = useState<number | null>(null);
   const [addingToList, setAddingToList] = useState(false);
   const [productPhotoOpen, setProductPhotoOpen] = useState(false);
+  const [history, setHistory] = useState<PriceHistory | null>(null);
 
   const loadPrices = useCallback(async () => {
     setLoadingPrices(true);
     try {
       setComparison(await api.comparison(ean, coords, userId));
+      // L'historique profite des prix importés par la comparaison (Open Prices…)
+      api.history(ean, 90).then(setHistory).catch(() => setHistory(null));
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError("unknown", "Les prix n'ont pas pu être chargés."));
     } finally {
@@ -351,12 +355,22 @@ export function ProductScreen({ ean }: { ean: string }) {
             </>
           )}
 
-          {comparison?.price_stats && comparison.price_stats.count >= 3 && (
+          {history && history.points.length >= 3 ? (
+            <>
+              <SectionTitle right={<Text style={type.tiny}>90 derniers jours</Text>}>Évolution du prix</SectionTitle>
+              <View style={styles.chartCard}>
+                <PriceHistoryChart points={history.points} median={history.stats?.median} />
+                <Text style={[type.tiny, { marginTop: space.sm }]}>
+                  {history.points.length} relevés, tous magasins confondus. Touche le graphique pour voir un relevé.
+                </Text>
+              </View>
+            </>
+          ) : comparison?.price_stats && comparison.price_stats.count >= 3 ? (
             <Text style={[type.small, { marginTop: space.lg }]}>
               Sur {comparison.price_stats.days} jours, ce produit a été vu entre {money(comparison.price_stats.min)} et{" "}
               {money(comparison.price_stats.max)} ({comparison.price_stats.count} relevés).
             </Text>
-          )}
+          ) : null}
 
           {locationMode !== "gps" && (
             <Text style={[type.tiny, { marginTop: space.lg }]}>
@@ -544,5 +558,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
   },
+  chartCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.lg },
   storeLink: { flexDirection: "row", alignItems: "center", gap: 2, alignSelf: "flex-start", paddingVertical: space.xs },
 });

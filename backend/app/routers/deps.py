@@ -38,6 +38,8 @@ def resolve_product(db: Session, raw_ean: str) -> Product:
     """Produit en base, sinon les bases ouvertes (et on le garde chez nous), sinon 404."""
     ean = clean_ean(raw_ean)
     product = db.scalar(select(Product).where(Product.ean == ean))
+    if product and product.source == "op_import":
+        return complete_imported(db, product)
     if product:
         return product
     external = catalog.lookup_ean(ean)
@@ -54,4 +56,20 @@ def require_product(db: Session, raw_ean: str) -> Product:
     product = find_product(db, raw_ean)
     if not product:
         raise api_error(404, "product_not_found", "Produit inconnu. Scanne-le d'abord.")
+    return product
+
+
+def complete_imported(db: Session, product: Product) -> Product:
+    """Fiche créée par l'import Open Prices (nom seul) : on la complète une fois depuis le catalogue."""
+    external = catalog.lookup_ean(product.ean)
+    if external:
+        for key, value in external.items():
+            if key == "name" and value == catalog.UNNAMED:
+                continue  # le nom venu d'Open Prices vaut mieux que « Produit sans nom »
+            if value is not None or key == "source":
+                setattr(product, key, value)
+    else:
+        product.source = "open_prices"
+    db.commit()
+    db.refresh(product)
     return product

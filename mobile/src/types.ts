@@ -184,3 +184,52 @@ export type RecentObservation = {
   source: string;
   confidence_level: ConfidenceLevel;
 };
+
+export type ReceiptLine = {
+  id: number;
+  position: number;
+  label: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  discount: number | null;
+  discount_label: string | null;
+  effective_unit_price: number;
+  is_weighted: boolean;
+  status: "pending" | "ignored" | "published";
+  match_source: "mapping" | "fuzzy" | "user" | null;
+  match_score: number | null;
+  product: Product | null;
+};
+
+export type Receipt = {
+  id: number;
+  status: "parsed" | "published";
+  detected_chain: string | null;
+  store: Store | null;
+  purchased_at: string | null;
+  total: number | null;
+  created_at: string;
+  warning: string | null;
+  counts: { lines: number; matched: number; ignored: number; published: number };
+  lines: ReceiptLine[];
+  published_now?: number;
+  message?: string;
+};
+
+export type ReceiptSummary = {
+  id: number;
+  status: "parsed" | "published";
+  chain: string | null;
+  store_name: string | null;
+  purchased_at: string | null;
+  created_at: string;
+  total: number | null;
+  lines: number;
+};
+
+export type PriceHistory = {
+  product: Product;
+  stats: PriceStats | null;
+  points: { observed_at: string; price: number; is_promotion: boolean; chain: string; store_name: string; source: string }[];
+};

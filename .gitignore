@@ -9,3 +9,6 @@ dist/
 postgres_data/
 uploads/
 .pytest_cache/
+# Données de travail du serveur (exports, diagnostics, sauvegardes)
+/data/
+/backups/
