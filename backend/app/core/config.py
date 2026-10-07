@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     # Prix des sites des enseignes (phase de test, usage personnel).
     # Désactivé par défaut : ces prix ne doivent jamais apparaître dans une version publique.
     enable_online_prices: bool = False
-    online_retailers: str = "carrefour,leclerc,auchan,monoprix,franprix"
+    online_retailers: str = "auchan"
     online_user_agent: str = "Pricer/0.6 (test personnel, non commercial)"
     online_min_delay_s: float = 4.0          # entre deux pages d'un même site
     online_cache_hours: int = 24             # un prix trouvé n'est pas redemandé avant

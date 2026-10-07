@@ -12,7 +12,9 @@ x-api-env: &api-env
   ENABLE_OSM_IMPORT: "true"
   IMPORT_BBOX: ${IMPORT_BBOX:-48.12,1.44,49.24,3.56}
   ENABLE_ONLINE_PRICES: ${ENABLE_ONLINE_PRICES:-false}
-  ONLINE_RETAILERS: ${ONLINE_RETAILERS:-carrefour,leclerc,auchan,monoprix,franprix}
+  ONLINE_RETAILERS: ${ONLINE_RETAILERS:-auchan}
+  # Ancienneté max d'un prix affiché (jours). 365 en phase de test : peu de prix récents autour de toi
+  PRICE_MAX_AGE_DAYS: ${PRICE_MAX_AGE_DAYS:-120}
   UPLOAD_DIR: /app/uploads
   RECEIPTS_DIR: /app/receipts
   DATA_DIR: /app/data

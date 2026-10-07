@@ -34,9 +34,9 @@ def save(folder: Path, name: str, page: http.Page) -> str:
     return str(path.relative_to(folder.parent.parent))
 
 
-def describe(page: http.Page, ean: str) -> dict:
+def describe(page: http.Page, ean: str, r: Retailer | None = None) -> dict:
     products = products_from_jsonld(page.text)
-    offer = find_offer(page.text, ean)
+    offer = find_offer(page.text, ean) or (r.extract(page.text, ean) if r and r.extract else None)
     return {
         "status": page.status,
         "url": page.url,
@@ -58,16 +58,16 @@ def probe_retailer(client: http.PoliteClient, r: Retailer, out: Path) -> dict:
             if r.direct:
                 page = client.get(r.direct(ean))
                 report["pages"].append({"type": "fiche", "ean": ean, "fichier": save(folder, f"fiche-{ean}", page),
-                                        **describe(page, ean)})
+                                        **describe(page, ean, r)})
             elif r.search:
                 page = client.get(r.search(ean))
                 links = re.findall(r.link_re.format(ean=ean), page.text) if r.link_re else []
                 report["pages"].append({"type": "recherche", "ean": ean, "liens_produit": links[:3],
-                                        "fichier": save(folder, f"recherche-{ean}", page), **describe(page, ean)})
+                                        "fichier": save(folder, f"recherche-{ean}", page), **describe(page, ean, r)})
                 if links:
                     page = client.get(r.base_url + links[0])
                     report["pages"].append({"type": "fiche", "ean": ean,
-                                            "fichier": save(folder, f"fiche-{ean}", page), **describe(page, ean)})
+                                            "fichier": save(folder, f"fiche-{ean}", page), **describe(page, ean, r)})
         if r.use_sitemaps:
             first = r.sitemap_url or (sitemaps[0] if sitemaps else None)
             if not first:
@@ -93,7 +93,7 @@ def probe_retailer(client: http.PoliteClient, r: Retailer, out: Path) -> dict:
                     if target:
                         page = client.get(target)
                         report["pages"].append({"type": "fiche (sitemap)", "fichier": save(folder, "fiche-sitemap", page),
-                                                **describe(page, ean)})
+                                                **describe(page, ean, r)})
         report["verdict"] = verdict(report)
     except http.SiteBlocked as exc:
         report["verdict"] = f"BLOQUÉ : {exc}. On ne contourne pas : enseigne à laisser de côté."
