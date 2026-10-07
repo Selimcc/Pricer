@@ -67,31 +67,80 @@ def read_jsonl(path: Path) -> Iterator[dict]:
                     continue
 
 
-def normalize_item(item: dict) -> dict:
-    """L'export peut être « à plat » (location_osm_id…) ou imbriqué comme l'API : on ramène à l'API."""
-    if not isinstance(item.get("location"), dict) and item.get("location_osm_id"):
-        display = item.get("location_osm_display_name") or ""
-        item = {**item, "location": {
-            "type": item.get("location_type") or "OSM",
-            "osm_id": item.get("location_osm_id"),
-            "osm_type": item.get("location_osm_type"),
-            "osm_lat": item.get("location_osm_lat"),
-            "osm_lon": item.get("location_osm_lon"),
-            "osm_name": item.get("location_osm_name") or display.split(",")[0].strip() or None,
-            "osm_brand": item.get("location_osm_brand"),
-            "osm_address_city": item.get("location_osm_address_city"),
-            "osm_address_postcode": item.get("location_osm_address_postcode"),
-            "osm_tag_value": item.get("location_osm_tag_value"),
-        }}
-    if not isinstance(item.get("proof"), dict) and item.get("proof_file_path"):
-        item = {**item, "proof": {"file_path": item["proof_file_path"]}}
+def location_from_row(row: dict, prefix: str = "") -> dict | None:
+    """Ligne de l'export des magasins (ou colonnes « location_* ») -> magasin au format de l'API."""
+    def get(key):
+        return row.get(prefix + key)
+
+    if (get("type") or "OSM") != "OSM" or not get("osm_id") or get("osm_lat") is None or get("osm_lon") is None:
+        return None  # magasins en ligne ou sans coordonnées
+    display = get("osm_display_name") or ""
+    return {
+        "type": "OSM",
+        "osm_id": get("osm_id"),
+        "osm_type": get("osm_type"),
+        "osm_lat": float(get("osm_lat")),
+        "osm_lon": float(get("osm_lon")),
+        "osm_name": get("osm_name") or display.split(",")[0].strip() or None,
+        "osm_brand": get("osm_brand"),
+        "osm_address_city": get("osm_address_city"),
+        "osm_address_postcode": get("osm_address_postcode"),
+        "osm_tag_value": get("osm_tag_value"),
+    }
+
+
+def load_locations(path: Path, bbox: tuple[float, float, float, float]) -> dict[int, dict]:
+    """Magasins de l'export, seulement ceux de la zone : id Open Prices -> magasin."""
+    result = {}
+    for row in read_jsonl(path):
+        loc = location_from_row(row)
+        if loc and row.get("id") is not None and in_bbox({"location": loc}, bbox):
+            result[int(row["id"])] = loc
+    return result
+
+
+def load_proofs(path: Path, wanted: set[int]) -> dict[int, str]:
+    """Photos de preuve utiles. Les tickets de caisse (données personnelles) ne sont pas repris."""
+    result = {}
+    for row in read_jsonl(path):
+        pid = row.get("id")
+        if pid in wanted and row.get("file_path") and (row.get("type") or "") != "RECEIPT":
+            result[int(pid)] = row["file_path"]
+    return result
+
+
+def _ref(value) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def normalize_item(item: dict, locations: dict[int, dict] | None = None,
+                   proofs: dict[int, str] | None = None) -> dict:
+    """Ramène un prix au format de l'API (magasin et preuve imbriqués), quel que soit le format de l'export :
+    imbriqué (API), « à plat » (colonnes location_osm_*) ou par identifiants (location_id, proof_id)."""
+    loc = item.get("location")
+    if not isinstance(loc, dict):
+        if item.get("location_osm_lat") is not None:
+            loc = location_from_row(item, "location_")
+        elif locations is not None:
+            loc = locations.get(_ref(item.get("location_id")) or _ref(loc))
+        else:
+            loc = None
+        item = {**item, "location": loc}
+    proof = item.get("proof")
+    if not isinstance(proof, dict):
+        path = item.get("proof_file_path") if (item.get("proof_type") or "") != "RECEIPT" else None
+        if not path and proofs:
+            path = proofs.get(_ref(item.get("proof_id")) or _ref(proof))
+        item = {**item, "proof": {"file_path": path} if path else None}
     if isinstance(item.get("product"), dict) and not item.get("product_name"):
         item = {**item, "product_name": item["product"].get("product_name")}
     return item
 
 
 def in_bbox(item: dict, bbox: tuple[float, float, float, float]) -> bool:
-    loc = item.get("location") or {}
+    loc = item.get("location")
+    if not isinstance(loc, dict):
+        return False
     lat, lon = loc.get("osm_lat"), loc.get("osm_lon")
     if lat is None or lon is None:
         return False
@@ -149,18 +198,47 @@ def import_items(db: Session, items: Iterable[dict], bbox: tuple[float, float, f
     return stats
 
 
+def export_url(name: str) -> str:
+    return settings.open_prices_export_url.rsplit("/", 1)[0] + f"/{name}.jsonl.gz"
+
+
 def run(bbox_text: str | None = None, days: int | None = None, file: str | None = None) -> dict:
     bbox = parse_bbox(bbox_text or settings.import_bbox)
     since = (datetime.now(timezone.utc) - timedelta(days=days or settings.open_prices_import_days)).date()
-    path = Path(file) if file else download(settings.open_prices_export_url,
-                                            Path(settings.data_dir) / "open-prices" / "prices.jsonl.gz")
+    folder = Path(settings.data_dir) / "open-prices"
+    path = Path(file) if file else download(settings.open_prices_export_url, folder / "prices.jsonl.gz")
+
+    # L'export des prix ne contient que l'identifiant du magasin et de la preuve : on joint les deux autres exports
+    locations = None
+    if not file:
+        locations = load_locations(download(export_url("locations"), folder / "locations.jsonl.gz"), bbox)
+        print(f"[open_prices_import] {len(locations)} magasins Open Prices dans la zone", flush=True)
+
+    read = 0
+    selected = []
+    for raw in read_jsonl(path):
+        read += 1
+        item = normalize_item(raw, locations)
+        if in_bbox(item, bbox) and (item.get("date") or "") >= since.isoformat():
+            selected.append(raw | {"location": item["location"]})
+
+    proofs: dict[int, str] = {}
+    wanted = {_ref(i.get("proof_id")) or _ref(i.get("proof")) for i in selected} - {None}
+    if wanted and not file:
+        try:
+            proofs = load_proofs(download(export_url("proofs"), folder / "proofs.jsonl.gz"), wanted)
+        except Exception as exc:  # les photos sont un plus : l'import continue sans
+            print(f"[open_prices_import] preuves indisponibles : {exc}")
+
     db = SessionLocal()
     try:
-        stats = import_items(db, read_jsonl(path), bbox, since)
+        stats = import_items(db, (normalize_item(i, locations, proofs) for i in selected), bbox, since)
     finally:
         db.close()
-    print(f"[open_prices_import] {stats['read']} prix lus, {stats['in_area']} dans la zone, "
-          f"{stats['imported']} nouveaux, {stats['stores']} magasins, {stats['new_products']} nouveaux produits")
+    stats["read"] = read
+    print(f"[open_prices_import] {read} prix lus, {stats['in_area']} dans la zone, "
+          f"{stats['imported']} nouveaux, {stats['stores']} magasins, {stats['new_products']} nouveaux produits",
+          flush=True)
     return stats
 
 
