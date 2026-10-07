@@ -11,7 +11,7 @@ L'état est gardé dans data/worker-state.json.
 import json
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.core.config import settings
@@ -76,6 +76,9 @@ def is_due(name: str, period: str, state: dict, now: datetime) -> bool:
     return datetime.fromisoformat(last).strftime("%G-W%V") != week and now.weekday() == 0
 
 
+RETRY_AFTER_FAILURE = timedelta(hours=1)
+
+
 def run_due(now: datetime | None = None) -> list[str]:
     now = now or datetime.now(timezone.utc)
     state = load_state()
@@ -83,12 +86,17 @@ def run_due(now: datetime | None = None) -> list[str]:
     for name, func, enabled, period in TASKS:
         if not enabled() or not is_due(name, period, state, now):
             continue
+        failed = state.get(f"{name}_failed_at")
+        if failed and now - datetime.fromisoformat(failed) < RETRY_AFTER_FAILURE:
+            continue
         print(f"[worker] {now:%Y-%m-%d %H:%M} UTC : {name}", flush=True)
         try:
             func()
+            state[name] = now.date().isoformat()
+            state.pop(f"{name}_failed_at", None)
         except Exception:
             traceback.print_exc()
-        state[name] = now.date().isoformat()
+            state[f"{name}_failed_at"] = now.isoformat()  # nouvel essai dans une heure
         save_state(state)
         ran.append(name)
     return ran

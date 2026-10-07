@@ -46,6 +46,45 @@ def test_import_flat_and_nested_items_in_area(db, factory):
     assert opi.import_items(db, [FLAT_ITEM, paris], IDF, date(2000, 1, 1))["imported"] == 0
 
 
+# Format réel de prices.jsonl.gz (octobre 2026) : magasin et preuve par identifiant seulement
+REAL_EXPORT_ROW = {
+    "id": 42629, "product_id": 374466, "location_id": 40, "proof_id": 12176, "type": "PRODUCT",
+    "product_code": "3274080005003", "product_name": None, "price": "1.250", "price_is_discounted": False,
+    "price_without_discount": None, "discount_type": None, "price_per": None, "currency": "EUR",
+    "location_osm_id": 4966187139, "location_osm_type": "NODE", "date": TODAY, "owner": "monsieurtanuki",
+    "product": 374466, "location": 40, "proof": 12176, "duplicate_of": None,
+}
+LOCATION_ROW = {"id": 40, "type": "OSM", "osm_id": 4966187139, "osm_type": "NODE", "osm_lat": 48.95, "osm_lon": 2.15,
+                "osm_display_name": "Carrefour Market, Avenue de Longueil, Maisons-Laffitte, France",
+                "osm_address_city": "Maisons-Laffitte", "osm_tag_value": "supermarket"}
+
+
+def _gz(path, rows):
+    with gzip.open(path, "wt", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+    return path
+
+
+def test_real_export_joins_locations_and_proofs(db, tmp_path, monkeypatch):
+    lyon = {**LOCATION_ROW, "id": 41, "osm_id": 1, "osm_lat": 45.76, "osm_lon": 4.83}
+    files = {
+        "prices.jsonl.gz": _gz(tmp_path / "p.gz", [REAL_EXPORT_ROW, {**REAL_EXPORT_ROW, "id": 2, "location": 41,
+                                                                      "location_id": 41}]),
+        "locations.jsonl.gz": _gz(tmp_path / "l.gz", [LOCATION_ROW, lyon, {"id": 42, "type": "ONLINE"}]),
+        "proofs.jsonl.gz": _gz(tmp_path / "pr.gz", [{"id": 12176, "file_path": "0001/tag.webp", "type": "PRICE_TAG"},
+                                                    {"id": 9, "file_path": "0001/ticket.webp", "type": "RECEIPT"}]),
+    }
+    monkeypatch.setattr(opi, "download", lambda url, target, max_age_h=20: files[url.rsplit("/", 1)[1]])
+    stats = opi.run("48.12,1.44,49.24,3.56", 365)
+    assert stats["read"] == 2 and stats["imported"] == 1
+    obs = db.scalar(select(PriceObservation))
+    assert str(obs.price) == "1.25" and obs.proof_image_url.endswith("0001/tag.webp")
+    store = db.get(Store, obs.store_id)
+    assert (store.chain, store.osm_id, store.city) == ("Carrefour Market", 4966187139, "Maisons-Laffitte")
+    assert opi.load_proofs(files["proofs.jsonl.gz"], {9}) == {}  # tickets de caisse jamais repris
+
+
 def test_import_reads_gzip_export(db, tmp_path):
     path = tmp_path / "prices.jsonl.gz"
     with gzip.open(path, "wt", encoding="utf-8") as f:
@@ -78,3 +117,16 @@ def test_worker_schedule(tmp_path, monkeypatch):
     monkeypatch.setattr(worker, "TASKS", [("a", lambda: ran.append("a"), lambda: True, "daily"),
                                           ("b", lambda: ran.append("b"), lambda: False, "daily")])
     assert worker.run_due(monday_night) == ["a"] and worker.run_due(monday_night) == []
+
+
+def test_worker_retries_failed_task_later(tmp_path, monkeypatch):
+    monkeypatch.setattr(worker, "STATE_FILE", tmp_path / "state.json")
+
+    def boom():
+        raise RuntimeError("réseau")
+
+    monkeypatch.setattr(worker, "TASKS", [("x", boom, lambda: True, "daily")])
+    now = datetime(2026, 10, 7, 14, 15, tzinfo=timezone.utc)
+    assert worker.run_due(now) == ["x"]
+    assert worker.run_due(now + timedelta(minutes=30)) == []  # pas de boucle d'échecs
+    assert worker.run_due(now + timedelta(hours=1, minutes=5)) == ["x"]  # mais pas oubliée jusqu'à demain
