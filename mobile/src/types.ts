@@ -227,3 +227,9 @@ export type ReceiptSummary = {
   total: number | null;
   lines: number;
 };
+
+export type PriceHistory = {
+  product: Product;
+  stats: PriceStats | null;
+  points: { observed_at: string; price: number; is_promotion: boolean; chain: string; store_name: string; source: string }[];
+};

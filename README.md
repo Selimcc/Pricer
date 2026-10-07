@@ -38,6 +38,7 @@ La photo du ticket est stockée dans un volume privé (`receipts`), jamais servi
 - Photo de l'étiquette comme preuve, stockée localement (prête pour S3).
 - Ajout d'un produit absent d'Open Food Facts.
 - Profil : contributions, niveau, confirmations reçues.
+- Graphique d'évolution du prix sur 90 jours dans la fiche produit (prix normaux / promos, prix habituel).
 
 **Fiabilité**
 - Score de confiance v2 : fraîcheur (demi-vie 7 jours), votes (moyenne bayésienne), preuves (photo, GPS vérifié sur place).
@@ -48,7 +49,7 @@ La photo du ticket est stockée dans un volume privé (`receipts`), jamais servi
 **Technique**
 - Migrations Alembic. Une base V0.2 existante est reconnue et migrée sans perte de données.
 - PostGIS réellement utilisé (`ST_DWithin` + index GiST) pour les recherches « autour de moi ».
-- API découpée en routers, 42 tests (dont un OCR réel) sur une vraie base PostGIS, CI GitHub Actions (backend + typecheck mobile).
+- API découpée en routers, 45 tests (dont un OCR réel) sur une vraie base PostGIS, CI GitHub Actions (backend + typecheck mobile).
 - App mobile découpée en écrans, nouvelle interface, navigation par onglets, identifiant anonyme persistant.
 
 ## Architecture
@@ -89,6 +90,24 @@ npx expo start
 ```
 
 Scanner le QR code avec Expo Go. Le téléphone et le PC doivent être sur le même Wi-Fi.
+
+### Utiliser l'app en magasin (4G)
+
+Par défaut, le téléphone doit être sur le même Wi-Fi que le PC. Pour l'utiliser dehors :
+
+1. À la racine, copie `.env.example` en `.env` et mets une longue clé secrète dans `APP_API_KEY`.
+2. Mets la même valeur dans `mobile/.env` : `EXPO_PUBLIC_API_KEY=...`
+3. Lance le tunnel Cloudflare (gratuit, sans compte) :
+
+   ```bash
+   docker compose --profile tunnel up -d
+   docker compose logs tunnel        # repère l'adresse https://xxx-yyy.trycloudflare.com
+   ```
+
+4. Dans l'app, onglet **Moi** > **Serveur** > **Modifier** : colle l'adresse du tunnel, puis « Tester et enregistrer ».
+5. Lance Expo en mode tunnel pour que le téléphone charge l'app hors du Wi-Fi : `npx expo start --tunnel`.
+
+Les requêtes qui passent par le tunnel doivent porter la clé (`X-Pricer-Key`), sinon l'API répond 401. Sur le réseau local, rien ne change. L'adresse du tunnel change à chaque redémarrage du conteneur `tunnel` ; le PC doit rester allumé.
 
 ### Parcours de test
 
@@ -139,9 +158,9 @@ La base de test doit avoir PostGIS ; elle est vidée à chaque lancement.
 
 ## Suite proposée
 
+1. Prix au kilo par catégorie (fruits, légumes, rayon trad) pour publier les articles au poids des tickets.
 2. Comptes et réputation (V0.6), pour pondérer les votes.
-3. Graphique d'historique des prix dans la fiche produit (l'endpoint existe).
-4. Carte des magasins dans l'app.
-5. Cloudflare Tunnel pour tester hors du Wi-Fi, puis AWS seulement une fois l'usage validé.
+3. Carte des magasins dans l'app.
+4. Tunnel nommé avec un nom de domaine (adresse fixe), puis AWS seulement une fois l'usage validé.
 
 Données : prix Open Prices et magasins © contributeurs OpenStreetMap, sous licence ODbL ; fiches produits Open Food Facts.

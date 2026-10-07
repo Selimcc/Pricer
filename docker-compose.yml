@@ -28,6 +28,8 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://grocery:grocery_dev_password@db:5432/grocery
       CORS_ORIGINS: "*"
+      # Clé exigée pour les requêtes venant du tunnel (fichier .env à la racine)
+      APP_API_KEY: ${APP_API_KEY:-}
       SEED_DEMO: "true"
       ENABLE_OPENFOODFACTS: "true"
       ENABLE_OPEN_PRICES: "true"
@@ -44,6 +46,17 @@ services:
       - ./backend/alembic:/app/alembic
       - uploads:/app/uploads
       - receipts:/app/receipts
+
+  # Accès depuis Internet (4G en magasin) : docker compose --profile tunnel up -d
+  # L'adresse publique (https://xxx.trycloudflare.com) s'affiche dans : docker compose logs tunnel
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: grocery-waze-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://api:8000
+    depends_on:
+      - api
+    profiles: ["tunnel"]
 
 volumes:
   postgres_data:
