@@ -7,6 +7,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://grocery:grocery_dev_password@localhost:5432/grocery"
     cors_origins: str = "*"
 
+    # Clé exigée pour les requêtes qui arrivent par Internet (tunnel Cloudflare).
+    # Vide = pas de contrôle (réseau local uniquement).
+    app_api_key: str = ""
+
     # Données de démonstration (magasins fictifs dans Paris centre)
     seed_demo: bool = True
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { api } from "../api";
 import { API_URL, FORCE_DEMO_LOCATION } from "../config";
@@ -7,7 +7,7 @@ import { relativeDate } from "../format";
 import { useApp } from "../state";
 import { colors, fonts, radius, space, type } from "../theme";
 import type { Contributions, ReceiptSummary } from "../types";
-import { EmptyState, ErrorBox, Header, Loading, PriceTag, ProductThumb, Row, SectionTitle } from "../ui";
+import { Button, EmptyState, ErrorBox, Header, Loading, PriceTag, ProductThumb, Row, SectionTitle } from "../ui";
 
 export function ProfileScreen() {
   const { userId, push, useDemoLocation, setUseDemoLocation, locationMode } = useApp();
@@ -140,10 +140,7 @@ export function ProfileScreen() {
               {locationMode === "gps" ? "Active" : locationMode === "denied" ? "Refusée ou indisponible" : locationMode === "demo" ? "Démo" : "En cours"}
             </Text>
           </View>
-          <View style={styles.setting}>
-            <Text style={type.bodyStrong}>Serveur</Text>
-            <Text style={type.tiny}>{API_URL}</Text>
-          </View>
+          <ServerSetting />
           <View style={[styles.setting, { borderBottomWidth: 0 }]}>
             <Text style={type.bodyStrong}>Identifiant anonyme</Text>
             <Text style={type.tiny}>{userId}. Aucun compte, aucune donnée personnelle.</Text>
@@ -154,6 +151,79 @@ export function ProfileScreen() {
           licence ODbL.
         </Text>
       </ScrollView>
+    </View>
+  );
+}
+
+/** Adresse du serveur : Wi-Fi à la maison, tunnel https en magasin. Modifiable sans relancer l'app. */
+function ServerSetting() {
+  const { serverUrl, setServerUrl, showToast } = useApp();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(serverUrl);
+  const [testing, setTesting] = useState(false);
+
+  async function save() {
+    const url = value.trim().replace(/\/$/, "");
+    if (!/^https?:\/\/.+/.test(url)) {
+      showToast("L'adresse doit commencer par http:// ou https://", "error");
+      return;
+    }
+    const previous = serverUrl;
+    setServerUrl(url);
+    setTesting(true);
+    try {
+      const h = await api.health();
+      showToast(`Serveur joignable (API ${h.version}).`, "success");
+      setEditing(false);
+    } catch (e) {
+      setServerUrl(previous === API_URL ? null : previous);
+      showToast(e instanceof Error ? e.message : "Serveur injoignable.", "error");
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <View style={styles.setting}>
+      <Row style={{ justifyContent: "space-between" }}>
+        <Text style={type.bodyStrong}>Serveur</Text>
+        {!editing && (
+          <Pressable onPress={() => { setValue(serverUrl); setEditing(true); }} hitSlop={8}>
+            <Text style={[type.small, { color: colors.ink, fontFamily: fonts.semibold }]}>Modifier</Text>
+          </Pressable>
+        )}
+      </Row>
+      {editing ? (
+        <View style={{ gap: space.sm, marginTop: space.xs }}>
+          <TextInput
+            value={value}
+            onChangeText={setValue}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            placeholder="https://xxx.trycloudflare.com"
+            placeholderTextColor={colors.muted}
+            style={styles.serverInput}
+          />
+          <Text style={type.tiny}>
+            À la maison : l'adresse Wi-Fi du PC. En magasin : l'adresse du tunnel affichée par « docker compose logs tunnel ».
+          </Text>
+          <Row>
+            <Button label="Tester et enregistrer" compact onPress={save} loading={testing} style={{ flex: 1 }} />
+            <Button label="Annuler" variant="ghost" compact onPress={() => setEditing(false)} />
+          </Row>
+          {serverUrl !== API_URL && (
+            <Button
+              label="Revenir à l'adresse du .env"
+              variant="ghost"
+              compact
+              onPress={() => { setServerUrl(null); setEditing(false); }}
+            />
+          )}
+        </View>
+      ) : (
+        <Text style={type.tiny}>{serverUrl}</Text>
+      )}
     </View>
   );
 }
@@ -186,6 +256,17 @@ const styles = StyleSheet.create({
     padding: space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
+  },
+  serverInput: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    fontFamily: fonts.medium,
+    fontSize: 15,
+    color: colors.ink,
   },
   setting: { padding: space.lg, gap: 2, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
 });

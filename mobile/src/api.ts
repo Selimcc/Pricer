@@ -1,4 +1,4 @@
-import { API_URL, CONTRIBUTE_RADIUS_KM, SEARCH_RADIUS_KM } from "./config";
+import { API_KEY, API_URL, CONTRIBUTE_RADIUS_KM, SEARCH_RADIUS_KM } from "./config";
 import type {
   BasketComparison,
   Comparison,
@@ -7,6 +7,7 @@ import type {
   ListItem,
   ObservationResult,
   Product,
+  PriceHistory,
   PromotionType,
   Receipt,
   ReceiptSummary,
@@ -23,6 +24,13 @@ export class ApiError extends Error {
   }
 }
 
+/** Adresse du serveur : celle du .env, ou celle saisie dans l'onglet Moi (tunnel en magasin…). */
+let baseUrl = API_URL;
+export const getBaseUrl = () => baseUrl;
+export const setBaseUrl = (url: string | null) => {
+  baseUrl = (url && url.trim() ? url.trim() : API_URL).replace(/\/$/, "");
+};
+
 const TIMEOUT_MS = 30000; // la 1re recherche dans une zone importe les magasins OSM
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -30,20 +38,29 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   let response: Response;
   try {
-    response = await fetch(`${API_URL}${path}`, {
+    response = await fetch(`${baseUrl}${path}`, {
       ...init,
       signal: controller.signal,
-      headers: init.body instanceof FormData ? init.headers : { "Content-Type": "application/json", ...init.headers },
+      headers: {
+        ...(init.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+        ...(API_KEY ? { "X-Pricer-Key": API_KEY } : {}),
+        ...(init.headers as Record<string, string> | undefined),
+      },
     });
   } catch {
     throw new ApiError(
       "network",
-      `Serveur injoignable (${API_URL}). Vérifie que l'API tourne et que le téléphone est sur le même Wi-Fi que le PC.`,
+      baseUrl.startsWith("https")
+        ? `Serveur injoignable (${baseUrl}). Vérifie que le PC et le tunnel tournent, et que l'adresse n'a pas changé.`
+        : `Serveur injoignable (${baseUrl}). Vérifie que l'API tourne et que le téléphone est sur le même Wi-Fi que le PC.`,
     );
   } finally {
     clearTimeout(timer);
   }
   if (response.status === 204) return undefined as T;
+  if (response.status === 530 || response.status === 502) {
+    throw new ApiError("tunnel_down", "Le tunnel ne répond pas : le PC est peut-être éteint ou l'adresse a changé.", response.status);
+  }
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = body?.detail;
@@ -66,7 +83,7 @@ const qs = (params: Record<string, string | number | undefined | null>) =>
 const at = (c: Coords) => ({ latitude: c.latitude.toFixed(5), longitude: c.longitude.toFixed(5) });
 
 export const api = {
-  baseUrl: API_URL,
+  health: () => request<{ status: string; version: string }>("/health"),
 
   product: (ean: string) => request<Product>(`/products/${encodeURIComponent(ean)}`),
 
@@ -79,6 +96,9 @@ export const api = {
     request<Comparison>(
       `/products/${encodeURIComponent(ean)}/comparison${qs({ ...at(coords), radius_km: SEARCH_RADIUS_KM, user_id: userId })}`,
     ),
+
+  history: (ean: string, days = 90) =>
+    request<PriceHistory>(`/products/${encodeURIComponent(ean)}/history${qs({ days })}`),
 
   nearbyStores: (coords: Coords, radiusKm = CONTRIBUTE_RADIUS_KM) =>
     request<Store[]>(`/stores/nearby${qs({ ...at(coords), radius_km: radiusKm })}`),
@@ -172,4 +192,4 @@ export const api = {
 };
 
 /** URL absolue d'une image (les preuves locales sont servies par l'API sous /uploads). */
-export const imageUrl = (url?: string | null) => (url && url.startsWith("/") ? `${API_URL}${url}` : url ?? undefined);
+export const imageUrl = (url?: string | null) => (url && url.startsWith("/") ? `${baseUrl}${url}` : url ?? undefined);
