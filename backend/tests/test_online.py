@@ -279,3 +279,15 @@ def test_auchan_microdata_reader():
     assert offer.price == Decimal("16.85") and offer.regular_price == Decimal("30.00") and offer.is_promotion
     assert parse.auchan_offer(AUCHAN_PAGE, CRISTALINE) is None  # autre produit affiché : pas de prix
     assert parse.declared_eans(AUCHAN_PAGE) == {"4007176128428"}
+
+
+def test_lookup_uses_site_reader_first(db, factory, online_on):
+    p = factory.product(ean="4007176128428", name="Figurine Disney Cristaline", brand="Bullyland")
+    url = "https://www.auchan.fr/bullyland-figurine-disney-cristaline/pr-C774424"
+    db.add(OnlineCatalogUrl(retailer="auchan", url=url, slug=matching.slug_of(url)))
+    db.commit()
+    client, _ = site({"/robots.txt": (200, ""), "/bullyland-figurine-disney-cristaline/pr-C774424": (200, AUCHAN_PAGE)})
+    trace = []
+    offer = online.lookup(db, RETAILERS["auchan"], p, client, trace=trace)
+    assert offer.price == Decimal("16.85") and offer.is_promotion and offer.regular_price == Decimal("30.00")
+    assert [t["étape"] for t in trace] == ["candidats sitemap", "pages à essayer", "page"]
