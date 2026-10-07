@@ -28,7 +28,7 @@ from app.db import SessionLocal
 from app.models import OnlineCatalogUrl, OnlineOffer, OnlineRetailerState, PriceObservation, Product, Store
 from app.services.online import http
 from app.services.online.matching import best_urls
-from app.services.online.parse import find_offer, page_gtins
+from app.services.online.parse import declared_eans, find_offer, page_gtins
 from app.services.online.retailers import RETAILERS, Retailer
 
 ERROR_RETRY = timedelta(hours=6)
@@ -133,10 +133,12 @@ def lookup(db: Session, retailer: Retailer, product: Product, client: http.Polit
             page = ready if ready and ready.url == url else client.get(url)
             if page.status == 404:
                 continue
-            gtins = page_gtins(page.text)
+            gtins = page_gtins(page.text) | declared_eans(page.text)
             if gtins and retailer.use_sitemaps:
                 _learn_ean(db, retailer.key, url, gtins)
             offer = find_offer(page.text, product.ean)
+            if offer is None and retailer.extract:
+                offer = retailer.extract(page.text, product.ean)
             if offer:
                 _save(db, retailer.key, product.id, found=True, price=offer.price, regular_price=offer.regular_price,
                       is_promotion=offer.is_promotion, url=page.url)

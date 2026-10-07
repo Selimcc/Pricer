@@ -261,3 +261,21 @@ def test_sitemap_retailer_waits_for_its_index(db, factory, online_on):
     client, calls = site({"/robots.txt": (200, "")})
     assert online.lookup(db, RETAILERS["auchan"], p, client) is None
     assert calls == [] and db.scalar(select(OnlineOffer)) is None
+
+
+# Extrait réduit d'une vraie fiche auchan.fr (7 octobre 2026) : microdonnées, pas de JSON-LD
+AUCHAN_PAGE = """<div class="offer-selector__price-wrapper product-price__container" itemprop="offers" itemscope="itemscope"
+ itemtype="http://schema.org/Offer"><del class="product-price product-price--small product-price--old text-dark-color normal"
+ aria-label="Ancien prix : 30,00&#x20AC;">30,00&#x20AC;</del><div class="product-price product-price--large bolder red-txt">
+ 16,85&#x20AC;</div><meta itemprop="price" content="16.85"><meta itemprop="priceCurrency" content="EUR"></div>
+<article itemscope="itemscope" itemtype="http://schema.org/Product" class="product-thumbnail"><div itemprop="offers">
+ <meta itemprop="price" content="4.99"></div></article>
+<span class="product-description__feature-label">R&#xE9;f / EAN :</span><div class="product-description__feature-values">
+ C774424 / 4007176128428 </div>"""
+
+
+def test_auchan_microdata_reader():
+    offer = parse.auchan_offer(AUCHAN_PAGE, "4007176128428")
+    assert offer.price == Decimal("16.85") and offer.regular_price == Decimal("30.00") and offer.is_promotion
+    assert parse.auchan_offer(AUCHAN_PAGE, CRISTALINE) is None  # autre produit affiché : pas de prix
+    assert parse.declared_eans(AUCHAN_PAGE) == {"4007176128428"}

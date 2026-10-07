@@ -96,11 +96,11 @@ docker compose exec api python -m app.jobs.open_prices_import
 docker compose exec api python -m app.jobs.probe
 ```
 
-Il enregistre les pages reçues dans `data/probe/`. Envoie-moi le résumé affiché et le dossier `data/probe` zippé : j'ajuste les lecteurs enseigne par enseigne. Ensuite, dans `.env` : `ENABLE_ONLINE_PRICES=true` (et `ONLINE_RETAILERS=` avec seulement les enseignes qui marchent), puis :
+Il enregistre les pages reçues dans `data/probe/`. Envoie-moi le résumé affiché et le dossier `data/probe` zippé : j'ajuste les lecteurs enseigne par enseigne. Résultat du 7 octobre 2026 : Carrefour et Monoprix refusent, e.leclerc et Franprix n'ont pas de pages exploitables, Auchan répond. Dans `.env` : `ENABLE_ONLINE_PRICES=true` et `ONLINE_RETAILERS=auchan`, puis :
 
 ```powershell
 docker compose up -d
-docker compose exec api python -m app.jobs.online index
+docker compose exec api python -m app.jobs.online index        # ~300 000 pages Auchan, quelques minutes
 docker compose exec api python -m app.jobs.online lookup 3274080005003
 docker compose exec api python -m app.jobs.online status
 ```

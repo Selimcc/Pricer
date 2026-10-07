@@ -1,5 +1,9 @@
 """Les enseignes dont on lit les prix en ligne, et comment trouver une page produit.
 
+Diagnostic du 7 octobre 2026 depuis le PC de Selim : Carrefour et Monoprix refusent (403),
+e.leclerc ne vend pas l'épicerie en ligne (404), Franprix ne publie pas ses pages produit.
+Auchan répond, avec des microdonnées plutôt que du JSON-LD. Par défaut : Auchan seul.
+
 Trois façons de trouver la page d'un code-barres, de la plus directe à la plus indirecte :
 - `direct` : l'adresse contient le code-barres (e.leclerc/fp/<EAN>) ;
 - `search` : la page de recherche du site renvoie un lien qui contient le code-barres ;
@@ -10,6 +14,8 @@ Trois façons de trouver la page d'un code-barres, de la plus directe à la plus
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+
+from app.services.online.parse import Offer, auchan_offer
 
 
 @dataclass(frozen=True)
@@ -26,6 +32,8 @@ class Retailer:
     use_sitemaps: bool = False
     product_path_re: re.Pattern | None = None
     ean_in_url_re: re.Pattern | None = None
+    # Lecteur propre au site quand la page n'a pas de description schema.org en JSON-LD
+    extract: Callable[[str, str], Offer | None] | None = None
 
     @property
     def label(self) -> str:
@@ -60,6 +68,7 @@ RETAILERS: dict[str, Retailer] = {r.key: r for r in [
         key="auchan", site="auchan.fr", base_url="https://www.auchan.fr",
         chain_re=re.compile(r"^auchan", re.I),
         sitemap_url="https://www.auchan.fr/sitemaps/sitemap-products.xml", use_sitemaps=True,
+        extract=auchan_offer,
     ),
     Retailer(
         key="monoprix", site="courses.monoprix.fr", base_url="https://courses.monoprix.fr",

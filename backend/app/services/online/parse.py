@@ -195,3 +195,41 @@ def _offer(p: PageProduct, how: str) -> Offer:
     promo = p.regular_price is not None and p.price is not None and p.regular_price > p.price
     return Offer(price=p.price, regular_price=p.regular_price if promo else None, is_promotion=promo,
                  name=p.name, matched_by=how)
+
+
+# ---------------------------------------------------------------- microdonnées (Auchan…)
+
+EAN_LABEL_RE = re.compile(r"EAN\s*:\s*</span>\s*<[^>]+>([^<]+)<", re.IGNORECASE)
+DATA_EAN_RE = re.compile(r"data-(?:flix-)?ean=[\"'](\d{8,14})[\"']", re.IGNORECASE)
+ITEMPROP_GTIN_RE = re.compile(r"itemprop=[\"']gtin(?:13|8|12|14)?[\"'][^>]*content=[\"'](\d{8,14})", re.IGNORECASE)
+
+
+def declared_eans(page_html: str) -> set[str]:
+    """Codes-barres affichés pour le produit principal (« Réf / EAN : … », data-ean, itemprop gtin)."""
+    found = set(DATA_EAN_RE.findall(page_html)) | set(ITEMPROP_GTIN_RE.findall(page_html))
+    for value in EAN_LABEL_RE.findall(page_html):
+        found |= set(re.findall(r"\b\d{8,14}\b", value))
+    return found
+
+
+def microdata_offer(page_html: str, ean: str, marker: str) -> Offer | None:
+    """Prix du bloc d'offre principal (repéré par `marker`), si l'EAN affiché est le bon."""
+    if not any(same_ean(e, ean) for e in declared_eans(page_html)):
+        return None
+    i = page_html.find(marker)
+    if i < 0:
+        return None
+    block = page_html[i:i + 5000]
+    m = re.search(r"itemprop=[\"']price[\"'][^>]*content=[\"']([^\"']+)", block)
+    price = to_price(m.group(1)) if m else None
+    if price is None:
+        return None
+    old = re.search(r"product-price--old[^>]*>\s*([\d\s.,]+)", block)
+    regular = to_price(old.group(1)) if old else None
+    promo = regular is not None and regular > price
+    return Offer(price=price, regular_price=regular if promo else None, is_promotion=promo, name=None,
+                 matched_by="gtin")
+
+
+def auchan_offer(page_html: str, ean: str) -> Offer | None:
+    return microdata_offer(page_html, ean, "offer-selector__price-wrapper")
