@@ -76,6 +76,12 @@ RETAILERS: dict[str, Retailer] = {r.key: r for r in [
         sitemap_url="https://courses.monoprix.fr/sitemaps/sitemap_index.xml", use_sitemaps=True,
         product_path_re=re.compile(r"/products/"),
     ),
+    # Pas de lecture automatique : prix envoyés par la tâche « panier de la semaine »
+    # (navigateur de Selim, ses 17 produits, une fois par semaine) via /imports/basket.
+    Retailer(
+        key="intermarche", site="intermarche.com", base_url="https://www.intermarche.com",
+        chain_re=re.compile(r"^intermarch", re.I),
+    ),
     Retailer(
         key="franprix", site="franprix.fr", base_url="https://www.franprix.fr",
         chain_re=re.compile(r"^franprix", re.I),

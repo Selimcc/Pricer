@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
-from app.routers import observations, products, receipts, stores, system, users
+from app.routers import imports, observations, products, receipts, stores, system, users
 from app.routers.system import API_VERSION
 
 app = FastAPI(
@@ -52,7 +52,8 @@ async def require_key_from_internet(request: Request, call_next):
     return await call_next(request)
 
 
-for router in (system.router, products.router, stores.router, observations.router, receipts.router, users.router):
+for router in (system.router, products.router, stores.router, observations.router, receipts.router, users.router,
+               imports.router):
     app.include_router(router)
 
 Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
