@@ -277,6 +277,12 @@ function BasketView({ basket }: { basket: BasketComparison }) {
           Prix connus ici pour {best.covered} produit{best.covered > 1 ? "s" : ""} sur {basket.priced_items}
           {estimated ? " ; les autres sont comptés au prix moyen du secteur." : "."}
         </Text>
+        {best.substituted && best.substituted.length > 0 && (
+          <Text style={styles.bestMeta}>
+            Avec {best.substituted.length === 1 ? "un équivalent" : `${best.substituted.length} équivalents`} d'une autre
+            marque : {best.substituted.map((x) => x.with.brand || x.with.name).join(", ")}.
+          </Text>
+        )}
         {basket.max_savings ? (
           <Text style={[styles.bestMeta, { color: "#8EE3BE", fontFamily: fonts.semibold }]}>
             Jusqu'à {money(basket.max_savings)} d'économie par rapport au plus cher
@@ -300,6 +306,7 @@ function BasketView({ basket }: { basket: BasketComparison }) {
                 <Text style={type.bodyStrong} numberOfLines={1}>{s.chain}</Text>
                 <Text style={type.tiny}>
                   {distance(s.distance_km)} · {s.covered}/{basket.priced_items} prix connus
+                  {s.substituted && s.substituted.length > 0 ? ` · ${s.substituted.length} équivalent${s.substituted.length > 1 ? "s" : ""}` : ""}
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>

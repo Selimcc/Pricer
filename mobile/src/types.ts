@@ -66,8 +66,23 @@ export type Comparison = {
   deal: { percent: number; label: string } | null;
   sources: Record<string, number>;
   area: { radius_km: number; stores_in_area: number; osm_import: "imported" | "cached" | "failed" };
+  /** Mêmes produits sous d'autres marques (même ligne de courses), avec leur meilleur prix autour. */
+  equivalents?: Equivalent[];
   /** Rempli seulement quand aucun prix proche et récent n'existe : relevés plus loin / plus anciens. */
   fallback: { radius_km: number; max_age_days: number; results: PriceRow[]; price_stats: PriceStats | null } | null;
+};
+
+export type Equivalent = {
+  group: string;
+  product: Pick<Product, "ean" | "name" | "brand" | "quantity" | "image_url">;
+  price: number;
+  unit_price?: number | null;
+  unit_price_label?: string | null;
+  chain: string;
+  store_name: string;
+  distance_km?: number | null;
+  source_label: string;
+  observed_at: string;
 };
 
 export type Store = {
@@ -113,6 +128,8 @@ export type BasketStore = {
   estimated_total: number;
   extra_vs_best: number;
   missing: { ean: string; name: string }[];
+  /** Produits de la liste remplacés par un équivalent (autre marque) dans ce magasin */
+  substituted?: { ean: string; name: string; with: { ean: string; name: string; brand?: string | null } }[];
 };
 
 export type BasketComparison = {

@@ -10,7 +10,7 @@ from app.models import PriceObservation, Product, Store
 from app.routers.deps import api_error, clean_ean, require_product, resolve_product
 from app.schemas import ProductCreate, ProductOut
 from app.schemas.schemas import USER_ID_PATTERN
-from app.services import geo, online, osm, pricing
+from app.services import equivalents, geo, online, osm, pricing
 from app.services.providers import sync_product_prices
 from app.services.quantity import parse_quantity
 from app.services.storage import ALLOWED_TYPES, storage
@@ -137,6 +137,8 @@ def comparison(
         "deal": pricing.deal_for(best_price, stats),
         "sources": sources,
         "fallback": fallback,
+        # Mêmes produits sous d'autres marques (ligne de courses commune), avec leur meilleur prix autour
+        "equivalents": equivalents.best_equivalent_prices(db, product, stores),
         "area": {
             "radius_km": radius_km,
             "stores_in_area": len(stores),
