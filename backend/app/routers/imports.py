@@ -3,20 +3,20 @@
 Sur le PC (réseau local), pas de clé ; depuis Internet (tunnel), clé exigée comme ailleurs.
 La page /imports sert au navigateur de l'app Claude : il colle le JSON et clique « Importer ».
 """
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, Query
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db import get_db
-from app.models import Product, ProductGroup, ProductGroupMember, ShoppingListItem
+from app.models import OnlineOffer, Product, ProductGroup, ProductGroupMember, ShoppingListItem
 from app.routers.deps import api_error
 from app.services.basket_import import BasketImportError, import_basket
 
 router = APIRouter(prefix="/imports", tags=["Imports"])
 
-WATCHLIST_MAX = 30
+WATCHLIST_PER_WEEK = 40
 
 PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Pricer · import du panier</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -61,16 +61,24 @@ def post_basket(payload: dict = Body(...), db: Session = Depends(get_db)):
 
 
 @router.get("/watchlist")
-def watchlist(db: Session = Depends(get_db)):
-    """Produits de la liste de courses à suivre en plus des lignes du panier (30 max)."""
-    items = db.scalars(
-        select(Product).join(ShoppingListItem, ShoppingListItem.product_id == Product.id)
-        .where(ShoppingListItem.checked.is_(False)).distinct().limit(WATCHLIST_MAX)
+def watchlist(limit: int = Query(WATCHLIST_PER_WEEK, ge=1, le=200), db: Session = Depends(get_db)):
+    """Produits de la liste de courses à suivre sur les sites, sans plafond sur la liste :
+    les jamais vérifiés puis les plus anciens d'abord, `limit` par passage (la tâche du
+    jeudi en prend 40 par semaine, le reste passe les semaines suivantes)."""
+    last_check = (select(OnlineOffer.product_id, func.max(OnlineOffer.checked_at).label("at"))
+                  .group_by(OnlineOffer.product_id).subquery())
+    rows = db.execute(
+        select(Product, last_check.c.at)
+        .where(Product.id.in_(select(ShoppingListItem.product_id).where(ShoppingListItem.checked.is_(False))))
+        .outerjoin(last_check, last_check.c.product_id == Product.id)
+        .order_by(last_check.c.at.asc().nulls_first(), Product.id)
+        .limit(limit)
     ).all()
+    ids = [p.id for p, _ in rows]
     groups = dict(db.execute(
         select(ProductGroupMember.product_id, ProductGroup.name)
         .join(ProductGroup, ProductGroup.id == ProductGroupMember.group_id)
-        .where(ProductGroupMember.product_id.in_([p.id for p in items]))
-    ).all()) if items else {}
-    return [{"ean": p.ean, "name": p.name, "brand": p.brand, "quantity": p.quantity, "line": groups.get(p.id)}
-            for p in items]
+        .where(ProductGroupMember.product_id.in_(ids))
+    ).all()) if ids else {}
+    return [{"ean": p.ean, "name": p.name, "brand": p.brand, "quantity": p.quantity, "line": groups.get(p.id),
+             "last_checked_at": at} for p, at in rows]

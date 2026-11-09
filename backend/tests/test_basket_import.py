@@ -103,10 +103,19 @@ def test_invalid_payloads(client):
     assert client.post("/imports/basket", json=bad_zone).status_code == 422
 
 
-def test_watchlist_and_page(client, factory):
+def test_watchlist_rotates_through_the_whole_list(client, factory, visible):
+    factory.store("Intermarché Super")
     factory.product()
-    client.post("/users/selim-device-1/list", json={"ean": "3017620422003"})
-    assert client.get("/imports/watchlist").json() == [
-        {"ean": "3017620422003", "name": "Nutella", "brand": "Ferrero", "quantity": "400 g", "line": None}]
+    client.post("/imports/basket", json=payload())  # thon Intermarché vérifié aujourd'hui
+    for ean in ("3017620422003", THON_INTER):
+        client.post("/users/selim-device-1/list", json={"ean": ean})
+    rows = client.get("/imports/watchlist").json()
+    # Jamais vérifié d'abord, puis le plus ancien
+    assert [r["ean"] for r in rows] == ["3017620422003", THON_INTER]
+    assert rows[0]["last_checked_at"] is None and rows[1]["line"] == "Thon, 3 × 140 g"
+    assert [r["ean"] for r in client.get("/imports/watchlist", params={"limit": 1}).json()] == ["3017620422003"]
+
+
+def test_import_page(client):
     page = client.get("/imports")
     assert page.status_code == 200 and 'id="payload"' in page.text and 'id="import"' in page.text
