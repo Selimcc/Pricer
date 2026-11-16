@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
-from sqlalchemy import case, func, select, true
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -22,14 +22,11 @@ SOURCE_LABELS = {"community": "Communauté", "receipt": "Ticket de caisse", "ope
 
 
 def visible():
-    """Filtre des relevés montrables : les prix lus en ligne n'existent que si l'option est active."""
-    return true() if settings.enable_online_prices else PriceObservation.source != "online"
+    """Filtre des relevés montrables : les prix d'origine « online » ne sont jamais affichés."""
+    return PriceObservation.source != "online"
 
 
 def source_label(obs: PriceObservation) -> str:
-    if obs.source == "online":
-        from app.services.online import label_for
-        return label_for(obs.user_id)
     return SOURCE_LABELS.get(obs.source, obs.source)
 
 

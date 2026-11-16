@@ -10,7 +10,7 @@ from app.models import PriceObservation, Product, Store
 from app.routers.deps import api_error, clean_ean, require_product, resolve_product
 from app.schemas import ProductCreate, ProductOut
 from app.schemas.schemas import USER_ID_PATTERN
-from app.services import equivalents, geo, online, osm, pricing
+from app.services import equivalents, geo, osm, pricing
 from app.services.providers import sync_product_prices
 from app.services.quantity import parse_quantity
 from app.services.storage import ALLOWED_TYPES, storage
@@ -96,7 +96,6 @@ def comparison(
     sync_product_prices(db, product)
 
     stores = geo.stores_within(db, latitude, longitude, radius_km)
-    online.sync(db, product, stores)
     rows = list(pricing.current_prices(db, [product], stores, user_id).values())
     rows.sort(key=lambda r: (r["price"], -r["confidence"]))
 
