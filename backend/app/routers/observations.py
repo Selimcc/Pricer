@@ -9,7 +9,7 @@ from app.db import get_db
 from app.models import ObservationVote, PriceObservation, Product, Store
 from app.routers.deps import api_error, require_product
 from app.schemas import ObservationCreate, VoteCreate
-from app.services import pricing, ratelimit
+from app.services import geo, pricing, ratelimit
 from app.services.providers.open_prices import PROMOTION_LABELS
 from app.services.scoring import confidence_for, haversine_km
 from app.services.storage import ALLOWED_TYPES, storage
@@ -20,15 +20,30 @@ DUPLICATE_WINDOW = timedelta(hours=6)
 
 
 @router.get("/recent")
-def recent_observations(limit: int = Query(12, ge=1, le=100), db: Session = Depends(get_db)):
-    rows = db.execute(
+def recent_observations(
+    limit: int = Query(12, ge=1, le=100),
+    latitude: float | None = Query(None, ge=-90, le=90),
+    longitude: float | None = Query(None, ge=-180, le=180),
+    radius_km: float = Query(10, gt=0, le=50),
+    db: Session = Depends(get_db),
+):
+    """Derniers prix relevés ; avec une position, seulement dans les magasins autour (avec la distance)."""
+    query = (
         select(PriceObservation, Product, Store)
         .join(Product, Product.id == PriceObservation.product_id)
         .join(Store, Store.id == PriceObservation.store_id)
-        # Le fil « derniers relevés » montre l'activité des gens, pas les imports automatiques
+        # Le fil montre l'activité des gens et des bases ouvertes, pas les prix lus sur les sites
         .where(PriceObservation.source.not_in(("online",)))
-        .order_by(PriceObservation.observed_at.desc(), PriceObservation.id.desc())
-        .limit(limit)
+    )
+    distances: dict[int, float] = {}
+    if latitude is not None and longitude is not None:
+        since = datetime.now(timezone.utc) - timedelta(days=settings.price_max_age_days)
+        distances = {s.id: d for s, d in geo.stores_within(db, latitude, longitude, radius_km, limit=2000)}
+        if not distances:
+            return []
+        query = query.where(PriceObservation.store_id.in_(distances), PriceObservation.observed_at >= since)
+    rows = db.execute(
+        query.order_by(PriceObservation.observed_at.desc(), PriceObservation.id.desc()).limit(limit)
     ).all()
     votes = pricing.vote_counts(db, [obs.id for obs, _, _ in rows])
     result = []
@@ -49,6 +64,7 @@ def recent_observations(limit: int = Query(12, ge=1, le=100), db: Session = Depe
             "promotion": obs.promotion_label if obs.is_promotion else None,
             "observed_at": obs.observed_at,
             "source": obs.source,
+            "distance_km": distances.get(store.id),
             "gps_verified": obs.gps_verified,
             "has_proof": bool(obs.proof_image_url),
             "flagged": obs.flagged,

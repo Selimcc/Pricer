@@ -207,9 +207,14 @@ def refresh(db: Session, product: Product, wait_s: float | None = None) -> None:
 
 # ---------------------------------------------------------------- relevés dans les magasins
 
-def attach(db: Session, products: list[Product], stores: list[tuple[Store, float | None]]) -> int:
-    """Recopie les prix en ligne trouvés vers les magasins de chaque enseigne."""
-    if not settings.enable_online_prices or not products or not stores:
+def attach(db: Session, products: list[Product], stores: list[tuple[Store, float | None]],
+           retailers: dict[str, Retailer] | None = None, require_enabled: bool = True) -> int:
+    """Recopie les prix en ligne trouvés vers les magasins de chaque enseigne.
+
+    `retailers` : enseignes concernées (par défaut celles activées) ; l'import du panier
+    de la semaine passe toutes les enseignes et `require_enabled=False`.
+    """
+    if (require_enabled and not settings.enable_online_prices) or not products or not stores:
         return 0
     max_age = datetime.now(timezone.utc) - timedelta(days=7)
     offers = db.scalars(select(OnlineOffer).where(
@@ -217,7 +222,7 @@ def attach(db: Session, products: list[Product], stores: list[tuple[Store, float
         OnlineOffer.checked_at >= max_age)).all()
     if not offers:
         return 0
-    retailers = {r.key: r for r in enabled_retailers()}
+    retailers = retailers if retailers is not None else {r.key: r for r in enabled_retailers()}
     store_ids = [s.id for s, _ in stores]
     latest: dict[tuple[int, int, str], PriceObservation] = {}
     for obs in db.scalars(

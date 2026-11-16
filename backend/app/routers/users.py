@@ -12,7 +12,7 @@ from app.db import get_db
 from app.models import ObservationVote, PriceObservation, Product, ShoppingListItem, Store
 from app.routers.deps import api_error, resolve_product, valid_user_id
 from app.schemas import ListItemCreate, ListItemUpdate, ProductOut
-from app.services import geo, online, osm, pricing
+from app.services import equivalents, geo, online, osm, pricing
 from app.services.providers import sync_product_prices
 
 router = APIRouter(prefix="/users/{user_id}", tags=["Utilisateur"])
@@ -133,6 +133,9 @@ def compare_list(
     # Prix en ligne déjà connus (pas de requête vers les sites ici : la liste peut être longue)
     online.attach(db, products, stores)
     rows = pricing.current_prices(db, products, stores)
+    # Un produit sans prix dans un magasin peut y être remplacé par son équivalent
+    # (ex. thon marque Carrefour au lieu du thon marque Intermarché)
+    rows = equivalents.with_substitutes(db, products, stores, rows)
     by_store = pricing.group_by_store(rows)
 
     prices_by_product: dict[int, list[float]] = {}
@@ -162,10 +165,15 @@ def compare_list(
             "known_total": round(known, 2),
             "estimated_total": round(estimated, 2),
             "missing": [{"ean": p.ean, "name": p.name} for p in missing],
+            "substituted": [
+                {"ean": next(p.ean for p in products if p.id == pid), "name": next(p.name for p in products if p.id == pid),
+                 "with": r["substitute"]}
+                for pid, r in items.items() if r.get("substitute")
+            ],
             "lines": [
                 {"ean": next(p.ean for p in products if p.id == pid), "price": r["price"],
                  "quantity": qty[pid], "is_promotion": r["is_promotion"],
-                 "confidence_level": r["confidence_level"]}
+                 "confidence_level": r["confidence_level"], "substitute": r.get("substitute")}
                 for pid, r in items.items()
             ],
         })

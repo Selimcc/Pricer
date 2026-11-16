@@ -234,3 +234,25 @@ class OnlineRetailerState(Base):
     last_status: Mapped[str | None] = mapped_column(String(255), nullable=True)
     sitemap_indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ProductGroup(Base):
+    """Produits équivalents d'une enseigne à l'autre (ex. « Thon, 3 × 140 g » :
+    marque Intermarché, marque Carrefour, marque Auchan). Les marques distributeur
+    n'ont pas le même code-barres : sans ce lien, impossible de comparer un panier."""
+
+    __tablename__ = "product_groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ProductGroupMember(Base):
+    __tablename__ = "product_group_members"
+    __table_args__ = (UniqueConstraint("group_id", "product_id", name="uq_group_member"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("product_groups.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

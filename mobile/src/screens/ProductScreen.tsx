@@ -355,6 +355,44 @@ export function ProductScreen({ ean }: { ean: string }) {
             </>
           )}
 
+          {/* Équivalents : mêmes produits sous d'autres marques (marques distributeur) */}
+          {comparison?.equivalents && comparison.equivalents.length > 0 && (
+            <>
+              <SectionTitle right={<Text style={type.tiny} numberOfLines={1}>{comparison.equivalents[0].group}</Text>}>
+                Équivalents
+              </SectionTitle>
+              <View style={styles.list}>
+                {comparison.equivalents.map((eq) => (
+                  <Pressable
+                    key={eq.product.ean}
+                    style={styles.fallbackRow}
+                    onPress={() => push({ name: "product", ean: eq.product.ean })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${eq.product.name}, ${money(eq.price)} chez ${eq.chain}`}
+                  >
+                    <ProductThumb uri={imageUrl(eq.product.image_url)} size={40} />
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <Text style={type.bodyStrong} numberOfLines={1}>
+                        {[eq.product.brand, eq.product.name].filter(Boolean).join(" · ")}
+                      </Text>
+                      <Text style={type.tiny} numberOfLines={1}>
+                        {[eq.chain, distance(eq.distance_km), eq.source_label].filter(Boolean).join(" · ")}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: "flex-end", gap: 2 }}>
+                      <PriceTag value={eq.price} size="md" />
+                      {comparison.best_price != null && Math.abs(eq.price - comparison.best_price) >= 0.01 && (
+                        <Text style={[type.tiny, { color: eq.price < comparison.best_price ? colors.good : colors.muted }]}>
+                          {signedMoney(eq.price - comparison.best_price)}
+                        </Text>
+                      )}
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+
           {history && history.points.length >= 3 ? (
             <>
               <SectionTitle right={<Text style={type.tiny}>90 derniers jours</Text>}>Évolution du prix</SectionTitle>

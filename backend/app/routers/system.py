@@ -11,7 +11,7 @@ from app.models import ObservationVote, OsmImportArea, PriceObservation, Product
 
 router = APIRouter(tags=["Système"])
 
-API_VERSION = "0.6.0"
+API_VERSION = "0.7.0"
 DASHBOARD_FILE = Path(__file__).resolve().parent.parent / "static" / "dashboard.html"
 
 

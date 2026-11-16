@@ -154,7 +154,11 @@ export const api = {
   compareList: (userId: string, coords: Coords) =>
     request<BasketComparison>(`/users/${userId}/list/comparison${qs({ ...at(coords), radius_km: SEARCH_RADIUS_KM })}`),
 
-  recentObservations: (limit = 6) => request<RecentObservation[]>(`/observations/recent${qs({ limit })}`),
+  /** Derniers prix ; avec une position, seulement dans les magasins autour. */
+  recentObservations: (limit = 6, coords?: Coords) =>
+    request<RecentObservation[]>(
+      `/observations/recent${qs({ limit, ...(coords ? { ...at(coords), radius_km: SEARCH_RADIUS_KM } : {}) })}`,
+    ),
 
   uploadReceipt: (userId: string, photoUri: string, coords?: Coords) => {
     const form = new FormData();

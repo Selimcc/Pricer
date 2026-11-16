@@ -5,6 +5,8 @@ from app.models.models import (  # noqa: F401
     OnlineRetailerState,
     OsmImportArea,
     PriceObservation,
+    ProductGroup,
+    ProductGroupMember,
     Product,
     Receipt,
     ReceiptLabelMapping,

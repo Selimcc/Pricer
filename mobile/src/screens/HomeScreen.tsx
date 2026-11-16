@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "../api";
 import { APP_NAME } from "../config";
-import { isValidBarcode, relativeDate } from "../format";
+import { distance, isValidBarcode, relativeDate } from "../format";
 import { useApp } from "../state";
 import { colors, fonts, radius, space, type } from "../theme";
 import type { RecentObservation } from "../types";
@@ -19,10 +19,25 @@ export function HomeScreen() {
   const [codeError, setCodeError] = useState<string | null>(null);
   const [place, setPlace] = useState<string | null>(null);
   const [feed, setFeed] = useState<RecentObservation[]>([]);
+  const [feedIsLocal, setFeedIsLocal] = useState(false);
 
+  // Prix autour de toi d'abord ; s'il n'y en a aucun, les derniers prix relevés ailleurs
   useEffect(() => {
-    api.recentObservations(6).then(setFeed).catch(() => setFeed([]));
-  }, []);
+    let cancelled = false;
+    api
+      .recentObservations(8, coords)
+      .then(async (local) => {
+        const rows = local.length ? local : await api.recentObservations(6);
+        if (!cancelled) {
+          setFeedIsLocal(local.length > 0);
+          setFeed(rows);
+        }
+      })
+      .catch(() => !cancelled && setFeed([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [coords.latitude, coords.longitude]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (locationMode !== "gps") {
@@ -171,7 +186,7 @@ export function HomeScreen() {
 
       {feed.length > 0 && (
         <View style={styles.pad}>
-          <SectionTitle>Derniers prix relevés</SectionTitle>
+          <SectionTitle>{feedIsLocal ? "Prix relevés autour de toi" : "Derniers prix relevés"}</SectionTitle>
           <View style={styles.feed}>
             {feed.map((o) => (
               <Pressable key={o.id} onPress={() => push({ name: "product", ean: o.ean })} style={styles.feedRow}>
@@ -180,7 +195,8 @@ export function HomeScreen() {
                   <Text style={type.bodyStrong} numberOfLines={1}>{o.product}</Text>
                   <Text style={type.tiny} numberOfLines={1}>
                     {o.chain}
-                    {o.city ? `, ${o.city}` : ""} · {relativeDate(o.observed_at)}
+                    {o.city ? `, ${o.city}` : ""}
+                    {o.distance_km != null ? ` · ${distance(o.distance_km)}` : ""} · {relativeDate(o.observed_at)}
                   </Text>
                 </View>
                 <View style={{ alignItems: "flex-end", gap: 2 }}>
